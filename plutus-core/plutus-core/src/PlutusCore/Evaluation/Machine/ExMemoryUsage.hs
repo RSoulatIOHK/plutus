@@ -214,9 +214,9 @@ instance ExMemoryUsage BS.ByteString where
     {-# INLINE memoryUsage #-}
 
 instance ExMemoryUsage T.Text where
-    -- This is slow and inaccurate, but matches the version that was originally deployed.
+    -- This inaccurate, but matches the version that was originally deployed.
     -- We may try and improve this in future so long as the new version matches this exactly.
-    memoryUsage text = memoryUsage $ T.unpack text
+    memoryUsage = singletonRose . fromIntegral . T.length
     {-# INLINE memoryUsage #-}
 
 instance ExMemoryUsage Int where
@@ -273,7 +273,7 @@ instance ExMemoryUsage Data where
         {-# INLINE dataNodeRose #-}
 
         sizeData d = addConstantRose dataNodeRose $ case d of
-            -- TODO: include the size of the tag, but not just yet.  See SCP-3677.
+            -- TODO: include the size of the tag, but not just yet. See PLT-1176.
             Constr _ l -> CostRose 0 $ l <&> sizeData
             Map l      -> CostRose 0 $ l >>= \(d1, d2) -> [d1, d2] <&> sizeData
             List l     -> CostRose 0 $ l <&> sizeData
