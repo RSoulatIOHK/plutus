@@ -1,0 +1,11 @@
+.pre-commit-config.yaml
+cabal.project.freeze
+dist
+dist-newstyle
+linkchecker-out.txt
+.vscode
+/plutus-metatheory
+/test
+result
+/doc
+haddock
