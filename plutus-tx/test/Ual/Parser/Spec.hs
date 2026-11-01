@@ -161,6 +161,7 @@ otherKindTests =
                   , propertyBody = "\8704 x, x \8594 x"
                   , propertyScope = []
                   , propertyLine = 9
+                  , propertyTemplate = Nothing
                   }
             )
     , testCase "PROPERTY body keeps internal newlines and indentation" $
@@ -221,6 +222,7 @@ assemblyTests =
                       , propertyBody = "True"
                       , propertyScope = []
                       , propertyLine = 11
+                      , propertyTemplate = Nothing
                       }
                   ]
               , ualUplcData = ["D"]

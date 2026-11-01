@@ -14,7 +14,7 @@ import Language.Haskell.TH.Syntax (Lift)
 {-|
   As per CIP-57, a validator arguments (redeemer, datum) and validator parameters
   all must specify a purpose that indicates in which context they are used. -}
-data Purpose = Spend | Mint | Withdraw | Publish
+data Purpose = Spend | Mint | Withdraw | Publish | Vote | Propose
   deriving stock (Eq, Ord, Show, Lift)
 
 instance ToJSON Purpose where
@@ -26,3 +26,5 @@ purposeToText = \case
   Mint -> "mint"
   Withdraw -> "withdraw"
   Publish -> "publish"
+  Vote -> "vote"
+  Propose -> "propose"

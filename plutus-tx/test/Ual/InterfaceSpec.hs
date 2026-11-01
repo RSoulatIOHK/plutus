@@ -12,6 +12,7 @@ import Data.Set qualified as Set
 import PlutusTx.Assurance.Interface (interfaceBlueprint)
 import PlutusTx.Blueprint
 import PlutusTx.Builtins (BuiltinData)
+import PlutusTx.Ual.Parser (parseBlock)
 import PlutusTx.Ual.Syntax
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
@@ -76,4 +77,17 @@ tests =
         let m = annotations AsNative
             ds = [d {onchainResolvedArgs = []} | d <- ualOnchain m]
          in assertBool "unresolved rejected" (isLeft (interfaceBlueprint [m {ualOnchain = ds}] bp))
+    , testCase "template assertion is independent of blueprint purposes" $
+        case parseBlock (MkRawBlock KProperty "[scope: test] [template: purpose-isolation spending]" 1) of
+          Right (BProperty p) ->
+            let m = (annotations AsNative) {ualProperties = [p]}
+             in case interfaceBlueprint [m] bp of
+                  Left err -> assertFailure err
+                  Right value -> do
+                    let output = LBS.unpack (encode value)
+                    assertBool "existing mint invocation is preserved" ("\"purpose\":\"mint\"" `isInfixOf` output)
+                    assertBool
+                      "template does not add a spending invocation"
+                      (not ("\"purpose\":\"spend\"" `isInfixOf` output))
+          _ -> assertFailure "expected a parsed template"
     ]

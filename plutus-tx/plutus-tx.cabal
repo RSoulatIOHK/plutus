@@ -133,6 +133,7 @@ library
     PlutusTx.Ual.Parser
     PlutusTx.Ual.Resolve
     PlutusTx.Ual.Syntax
+    PlutusTx.Ual.Templates
     PlutusTx.Ual.TH
     PlutusTx.Utils
 
@@ -260,6 +261,7 @@ test-suite plutus-tx-test
     Ual.Parser.Spec
     Ual.Resolve.Spec
     Ual.Spec
+    Ual.TemplatesSpec
 
   hs-source-dirs: test
   build-depends:

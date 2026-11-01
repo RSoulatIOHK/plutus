@@ -25,6 +25,7 @@ import PlutusTx.Ual.Syntax
   , OnchainKind (..)
   , ResolvedArgument (..)
   )
+import PlutusTx.Ual.Templates (expandPropertyTemplates)
 
 {-| The blueprint validator id an @ONCHAIN@ block claims. Identity, so the id is
 readable straight off the annotation. The Template Haskell helper that derives a
@@ -48,11 +49,13 @@ attachUal modules MkContractBlueprint {..} =
         <> versionErrors
         <> missingErrors
         <> orphanErrors
+        <> templateErrors
     ) of
     [] -> Right MkContractBlueprint {contractValidators = Set.map fill contractValidators, ..}
     errs -> Left errs
   where
     preambleVersion' = preamblePlutusVersion contractPreamble
+    templateErrors = either id (const []) (expandPropertyTemplates modules)
 
     -- Duplicate names are diagnosed before the map is used.
     decls :: Map.Map Text OnchainDecl

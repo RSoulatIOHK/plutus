@@ -202,6 +202,7 @@ buildTests =
         , propertyBody = "True"
         , propertyScope = []
         , propertyLine = 1
+        , propertyTemplate = Nothing
         }
 
 doc :: AssuranceDocument
