@@ -1,0 +1,24 @@
+{
+  "format": "cardano-blaster-project-v1",
+  "blueprint": ".local/cardano-blaster/plutus.json",
+  "assurance": ".local/cardano-blaster/assurance.json",
+  "sources": [
+    "Main.hs",
+    "OnChain.hs",
+    "FormalSpec.hs",
+    "../../../AuctionValidator.hs"
+  ],
+  "profile": "cardano-v3",
+  "refreshEnvironment": true,
+  "generator": {
+    "command": "node",
+    "args": [
+      "${extensionDir}/scripts/generate-plutus-ual.js",
+      "docusaurus-examples:exe:example-ual-auction",
+      "${projectDir}",
+      "${ghcPath}",
+      "${projectDir}/.local/cardano-blaster"
+    ],
+    "env": { "BLASTER_CABAL": "${cabalPath}" }
+  }
+}
