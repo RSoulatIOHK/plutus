@@ -1,0 +1,19 @@
+{
+  "format": "cardano-blaster-project-v1",
+  "blueprint": ".local/cardano-blaster/plutus.json",
+  "assurance": ".local/cardano-blaster/assurance.json",
+  "sources": ["Main.hs"],
+  "profile": "core",
+  "refreshEnvironment": true,
+  "generator": {
+    "command": "node",
+    "args": [
+      "${extensionDir}/scripts/generate-plutus-ual.js",
+      "docusaurus-examples:exe:example-ual-game",
+      "${projectDir}",
+      "${ghcPath}",
+      "${projectDir}/.local/cardano-blaster"
+    ],
+    "env": { "BLASTER_CABAL": "${cabalPath}" }
+  }
+}
