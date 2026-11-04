@@ -19,9 +19,10 @@ purpose isolation and existence of an accepted typed context. The three
 purpose-isolation claims for `spendingOnly`, `spendingAndMinting` and
 `parameterizedSpending` should verify. The isolation claim for `uncheckedPurpose`
 should be falsified with a counterexample replayed against its compiled UPLC.
-The four acceptance claims should verify, demonstrating that none of these
-scripts simply rejects every context. The complete bundle therefore
-intentionally exits with code 1.
+The four generated negative acceptance claims should be falsified with
+confirmed UPLC replays. The checker reports these expected falsifications as
+`witnessed`, demonstrating that none of these scripts simply rejects every
+context. The complete bundle intentionally exits with code 1.
 
 The source annotations are sufficient:
 
@@ -40,25 +41,29 @@ The source annotations are sufficient:
 @-}
 ```
 
-The native parameter is universally quantified in the isolation claim and
-existentially quantified in the separate acceptance claim. The vulnerable script checks the
+The native parameter is universally quantified in both formal claims. The
+acceptance template negates successful execution for every parameter and
+context, then expects a confirmed counterexample; that witness establishes the
+desired existential acceptance. The vulnerable script checks the
 transaction's range and treasury fields but omits purpose validation; it does not
 rely on changing a formal claim to obtain a counterexample.
 
 Each annotation expands to its own ordinary quantified Lean proposition in the
 assurance document. Isolation requires actual evaluation failure for every typed
-context whose purpose is outside the explicitly supplied set; acceptance requires
-successful evaluation for at least one typed context, with no purpose restriction.
+context whose purpose is outside the explicitly supplied set; acceptance is
+established by replaying a falsification of the generated universal rejection
+claim. A solver model that fails replay does not count as an acceptance witness.
 Neither template infers a purpose from the blueprint. All four blueprint entries
 deliberately retain spending invocation metadata, including the script whose
 isolation template also allows minting.
 
-Both templates currently support Plutus V3 scripts and raw `BuiltinData` context
-arguments. Isolation quantifies script parameters universally; acceptance
-quantifies them existentially. Unknown template names/purposes, duplicate
-purposes, a set allowing all purposes, missing or multiple scopes, functions,
-V1/V2 scripts and applied parameter bindings are diagnosed. Exhaustion of the
-verification step bound does not count as rejection. Typed contexts in this
+Isolation currently supports Plutus V3; acceptance supports V1, V2 and V3.
+Both require a raw `BuiltinData` context argument. Unknown template
+names/purposes, duplicate purposes, a set allowing all purposes, missing or
+multiple scopes, functions, V1/V2 purpose isolation, V4 acceptance (until the
+Lean ledger has a V4 context codec) and applied parameter bindings are
+diagnosed. Exhaustion of the verification step bound does not count as
+rejection. Typed contexts in this
 property are not assumed to be ledger-valid transactions.
 
 The Auction example keeps its 31 checked scenario properties. A universal

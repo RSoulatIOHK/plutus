@@ -247,6 +247,7 @@ doc =
             { propertyIdent = "ticket_ok"
             , propertyTitle = Nothing
             , propertyValidators = ["ticket-spend"]
+            , propertyTags = []
             , propertyStatement =
                 MkStatement
                   { statementText = "A valid ticket is always accepted."

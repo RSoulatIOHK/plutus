@@ -5,7 +5,7 @@ module PlutusTx.Ual.Templates (expandPropertyTemplates) where
 
 import Data.List (nub, sort)
 import Data.Text qualified as T
-import PlutusTx.Blueprint.PlutusVersion (PlutusVersion (PlutusV3))
+import PlutusTx.Blueprint.PlutusVersion (PlutusVersion (PlutusV1, PlutusV2, PlutusV3, PlutusV4))
 import PlutusTx.Blueprint.Purpose (Purpose (..), purposeToText)
 import PlutusTx.Ual.Error (UalError (..))
 import PlutusTx.Ual.Syntax
@@ -29,9 +29,9 @@ expandPropertyTemplates modules = case concatMap errors expanded of
         d <- case [d | d <- decls, onchainName d == target] of
           [d] -> Right d
           _ -> invalid ("template target is missing or ambiguous: " <> target)
-        if onchainKind d == Script && onchainVersion d == Just PlutusV3
-          then Right ()
-          else invalid "property templates require a script with explicit version PlutusV3"
+        version <- case (onchainKind d, onchainVersion d) of
+          (Script, Just v) -> Right v
+          _ -> invalid "property templates require a script with an explicit Plutus version"
         case reverse (onchainArgs d) of
           MkUalArgument "BuiltinData" AsData : _ -> Right ()
           _ -> invalid "property templates require a raw BuiltinData context argument"
@@ -39,11 +39,14 @@ expandPropertyTemplates modules = case concatMap errors expanded of
             applied =
               "«"
                 <> target
-                <> "» "
-                <> T.unwords params
+                <> "»"
+                <> (if null params then "" else " " <> T.unwords params)
                 <> " (CardanoLedgerApi.IsData.Class.toLedgerData ctx)"
         (text, source) <- case template of
           PurposeIsolation allowed -> do
+            if version == PlutusV3
+              then Right ()
+              else invalid "purpose-isolation currently requires PlutusV3"
             if null allowed || length allowed /= length (nub allowed) || length allowed >= 6
               then invalid "purpose-isolation requires unique allowed purposes and at least one excluded purpose"
               else Right ()
@@ -68,8 +71,8 @@ expandPropertyTemplates modules = case concatMap errors expanded of
                   <> T.intercalate ", " (map purposeToText (sort allowed))
                   <> "}."
               , "∀ "
-                  <> T.unwords params
-                  <> " (ctx : CardanoLedgerApi.V3.ScriptContext),\n"
+                  <> (if null params then "" else T.unwords params <> " ")
+                  <> "(ctx : CardanoLedgerApi.V3.ScriptContext),\n"
                   <> "  (match ctx.scriptContextScriptInfo with\n    "
                   <> T.intercalate "\n    " branches
                   <> ") ∨\n"
@@ -77,15 +80,22 @@ expandPropertyTemplates modules = case concatMap errors expanded of
                   <> applied
                   <> ")"
               )
-          AcceptsSomeContext ->
+          AcceptsSomeContext -> do
+            contextType <- case version of
+              PlutusV1 -> Right "CardanoLedgerApi.V1.ScriptContext"
+              PlutusV2 -> Right "CardanoLedgerApi.V2.ScriptContext"
+              PlutusV3 -> Right "CardanoLedgerApi.V3.ScriptContext"
+              PlutusV4 -> invalid "accepts-some-context requires a V4 ScriptContext codec in CardanoLedgerApiBlaster"
             Right
-              ( "The compiled script terminates successfully for at least one typed script context."
-              , T.concat ["Exists (fun " <> param <> " =>\n" | param <- params]
-                  <> "∃ (ctx : CardanoLedgerApi.V3.ScriptContext),\n"
-                  <> "  PlutusCore.UPLC.Utils.isSuccessful ("
+              ( "The compiled script succeeds for some typed script context."
+              , "∀ "
+                  <> (if null params then "" else T.unwords params <> " ")
+                  <> "(ctx : "
+                  <> contextType
+                  <> "),\n"
+                  <> "  ¬ PlutusCore.UPLC.Utils.isSuccessful ("
                   <> applied
                   <> ")"
-                  <> T.replicate (length params) ")"
               )
         Right
           p

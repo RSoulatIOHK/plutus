@@ -61,7 +61,7 @@ tests =
                 "minting is also allowed"
                 (any (T.isInfixOf ".MintingScript _ => True" . propertyBody) (ualProperties expanded))
             _ -> assertFailure "expected one module"
-    , testCase "acceptance is generated as an independent existential property" $
+    , testCase "acceptance generates an independent negated universal claim" $
         case moduleUalFromSource (UalModuleName "Spec") $
           T.unlines
             [ "module Spec where"
@@ -80,8 +80,8 @@ tests =
                   "isolation remains a universal rejection claim"
                   ("∀ parameter0 (ctx : CardanoLedgerApi.V3.ScriptContext)" `T.isInfixOf` propertyBody isolation)
                 assertBool
-                  "acceptance has its own existential over parameters and typed context"
-                  ( "Exists (fun parameter0 =>\n∃ (ctx : CardanoLedgerApi.V3.ScriptContext)"
+                  "acceptance negates universal successful execution"
+                  ( "∀ parameter0 (ctx : CardanoLedgerApi.V3.ScriptContext),\n  ¬ PlutusCore.UPLC.Utils.isSuccessful"
                       `T.isInfixOf` propertyBody acceptance
                   )
                 assertBool
@@ -92,7 +92,7 @@ tests =
                   (not ("scriptContextScriptInfo" `T.isInfixOf` propertyBody acceptance))
               _ -> assertFailure "expected two independent generated properties"
             _ -> assertFailure "expected one module"
-    , testCase "acceptance without script parameters quantifies only the context" $
+    , testCase "acceptance without other inputs quantifies only the context" $
         case parse "[scope: auction] [template: accepts-some-context]" of
           Left e -> assertFailure (show e)
           Right m ->
@@ -102,13 +102,39 @@ tests =
                   Right [expanded] -> case ualProperties expanded of
                     [p] -> do
                       assertBool
-                        "single existential context binder"
-                        ("∃ (ctx : CardanoLedgerApi.V3.ScriptContext)" `T.isInfixOf` propertyBody p)
+                        "single universal context binder"
+                        ("∀ (ctx : CardanoLedgerApi.V3.ScriptContext)" `T.isInfixOf` propertyBody p)
                       assertBool
                         "no phantom parameter binder"
                         (not ("parameter0" `T.isInfixOf` propertyBody p))
                     _ -> assertFailure "expected one generated property"
                   _ -> assertFailure "expected one module"
+    , testCase "acceptance selects the typed context for each Plutus version" $
+        case parse "[scope: auction] [template: accepts-some-context]" of
+          Left e -> assertFailure (show e)
+          Right m ->
+            mapM_
+              ( \(version, context) ->
+                  let scripts = [d {onchainVersion = Just version} | d <- ualOnchain m]
+                   in case expandPropertyTemplates [m {ualOnchain = scripts}] of
+                        Right [expanded] ->
+                          assertBool
+                            "uses the context type for the script's version"
+                            (any (T.isInfixOf context . propertyBody) (ualProperties expanded))
+                        other -> assertFailure (show other)
+              )
+              [ (PlutusV1, "CardanoLedgerApi.V1.ScriptContext")
+              , (PlutusV2, "CardanoLedgerApi.V2.ScriptContext")
+              , (PlutusV3, "CardanoLedgerApi.V3.ScriptContext")
+              ]
+    , testCase "V4 acceptance reports the missing ledger codec" $
+        case parse "[scope: auction] [template: accepts-some-context]" of
+          Left e -> assertFailure (show e)
+          Right m ->
+            case expandPropertyTemplates [m {ualOnchain = [d {onchainVersion = Just PlutusV4} | d <- ualOnchain m]}] of
+              Left es ->
+                assertBool "V4 codec limitation is named" ("V4 ScriptContext codec" `T.isInfixOf` T.pack (show es))
+              Right _ -> assertFailure "V4 must not generate a V3 context claim"
     , testCase "template target may be imported from another module" $
         case parse "[scope: auction] [template: purpose-isolation spending]" of
           Left e -> assertFailure (show e)

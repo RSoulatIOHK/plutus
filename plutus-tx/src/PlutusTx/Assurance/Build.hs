@@ -19,6 +19,7 @@ import PlutusTx.Ual.Syntax
   ( ModuleUal (..)
   , OnchainDecl (..)
   , PropertyDecl (..)
+  , PropertyTemplate (AcceptsSomeContext)
   , UalModuleName (..)
   )
 import PlutusTx.Ual.Templates (expandPropertyTemplates)
@@ -151,6 +152,9 @@ buildExpandedAssurance preamble ref defaultValidator modules =
                         , formalSource = propertyBody p
                         }
                 }
+          , propertyTags = case propertyTemplate p of
+              Just AcceptsSomeContext -> ["expect:falsified"]
+              _ -> []
           }
       | m <- modules
       , let mname = nameOf (ualModuleName m)
