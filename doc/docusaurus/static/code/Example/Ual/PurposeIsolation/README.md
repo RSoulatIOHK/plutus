@@ -15,14 +15,15 @@ cardano-blaster check plutus.json assurance.json --refresh-environment
 ```
 
 The source generates two independent properties for each of the four scripts:
-purpose isolation and existence of an accepted typed context. The three
+purpose isolation and existence of an accepted valid script context. The three
 purpose-isolation claims for `spendingOnly`, `spendingAndMinting` and
 `parameterizedSpending` should verify. The isolation claim for `uncheckedPurpose`
 should be falsified with a counterexample replayed against its compiled UPLC.
-The four generated negative acceptance claims should be falsified with
-confirmed UPLC replays. The checker reports these expected falsifications as
-`witnessed`, demonstrating that none of these scripts simply rejects every
-context. The complete bundle intentionally exits with code 1.
+The generated negative acceptance claims seek a counterexample with
+`validScriptContext = true` and a confirmed UPLC replay. A falsification
+establishes that the script accepts a valid context; an inconclusive check is
+not an acceptance witness. The complete bundle can exit with code 1 because
+the isolation claim for `uncheckedPurpose` is intentionally falsified.
 
 The source annotations are sufficient:
 
@@ -42,7 +43,7 @@ The source annotations are sufficient:
 ```
 
 The native parameter is universally quantified in both formal claims. The
-acceptance template negates successful execution for every parameter and
+acceptance template negates successful execution for every parameter and valid
 context, then expects a confirmed counterexample; that witness establishes the
 desired existential acceptance. The parameterized script accepts a spending
 context when its native integer parameter is seven. The vulnerable script checks the
@@ -50,8 +51,8 @@ transaction's range and treasury fields but omits purpose validation; it does no
 rely on changing a formal claim to obtain a counterexample.
 
 Each annotation expands to its own ordinary quantified Lean proposition in the
-assurance document. Isolation requires actual evaluation failure for every typed
-context whose purpose is outside the explicitly supplied set; acceptance is
+assurance document. Isolation requires actual evaluation failure for every valid
+script context whose purpose is outside the explicitly supplied set; acceptance is
 established by replaying a falsification of the generated universal rejection
 claim. A solver model that fails replay does not count as an acceptance witness.
 Neither template infers a purpose from the blueprint. All four blueprint entries
@@ -64,8 +65,9 @@ names/purposes, duplicate purposes, a set allowing all purposes, missing or
 multiple scopes, functions, V1/V2 purpose isolation, V4 acceptance (until the
 Lean ledger has a V4 context codec) and applied parameter bindings are
 diagnosed. Exhaustion of the verification step bound does not count as
-rejection. Typed contexts in this
-property are not assumed to be ledger-valid transactions.
+rejection. Both templates use the version-specific `validScriptContext`
+predicate as their domain condition. V1 additionally quantifies the datum;
+V2 quantifies the datum and redeemer required by that predicate.
 
 The Auction example keeps its 31 checked scenario properties. A universal
 purpose-isolation claim for that larger validator currently exceeds the

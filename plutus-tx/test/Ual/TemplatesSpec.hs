@@ -41,6 +41,9 @@ tests =
                   "all contexts and parameters are quantified"
                   ("∀ parameter0 (ctx : CardanoLedgerApi.V3.ScriptContext)" `T.isInfixOf` propertyBody p)
                 assertBool
+                  "only valid script contexts are checked"
+                  ("¬ (CardanoLedgerApi.V3.Contexts.validScriptContext ctx = true) ∨" `T.isInfixOf` propertyBody p)
+                assertBool
                   "actual script failure, not negated success"
                   ("isUnsuccessful («auction» parameter0" `T.isInfixOf` propertyBody p)
                 assertBool
@@ -80,8 +83,8 @@ tests =
                   "isolation remains a universal rejection claim"
                   ("∀ parameter0 (ctx : CardanoLedgerApi.V3.ScriptContext)" `T.isInfixOf` propertyBody isolation)
                 assertBool
-                  "acceptance searches for a well-formed successful execution"
-                  ( "∀ parameter0 (ctx : CardanoLedgerApi.V3.ScriptContext),\n  ¬ (CardanoLedgerApi.V3.Contexts.hasDecodableRawFields ctx.scriptContextTxInfo = true ∧\n     CardanoLedgerApi.V3.Contexts.validScriptInfo ctx = true ∧\n     CardanoLedgerApi.V3.Contexts.validMintValue ctx.scriptContextTxInfo.txInfoMint = true ∧\n     PlutusCore.UPLC.Utils.isSuccessful"
+                  "acceptance searches for a valid successful execution"
+                  ( "∀ parameter0 (ctx : CardanoLedgerApi.V3.ScriptContext),\n  ¬ (CardanoLedgerApi.V3.Contexts.validScriptContext ctx = true ∧\n     PlutusCore.UPLC.Utils.isSuccessful"
                       `T.isInfixOf` propertyBody acceptance
                   )
                 assertBool
@@ -114,7 +117,7 @@ tests =
           Left e -> assertFailure (show e)
           Right m ->
             mapM_
-              ( \(version, context, decodableRawFields) ->
+              ( \(version, binders, context, validContext) ->
                   let scripts = [d {onchainVersion = Just version} | d <- ualOnchain m]
                    in case expandPropertyTemplates [m {ualOnchain = scripts}] of
                         Right [expanded] -> do
@@ -122,24 +125,30 @@ tests =
                             "uses the context type for the script's version"
                             (any (T.isInfixOf context . propertyBody) (ualProperties expanded))
                           assertBool
-                            "uses the decodability guard for the script's version"
-                            (any (T.isInfixOf decodableRawFields . propertyBody) (ualProperties expanded))
+                            "uses the full validity predicate for the script's version"
+                            (any (T.isInfixOf validContext . propertyBody) (ualProperties expanded))
+                          assertBool
+                            "binds the datum and redeemer required by validity"
+                            (any (T.isInfixOf binders . propertyBody) (ualProperties expanded))
                         other -> assertFailure (show other)
               )
               [
                 ( PlutusV1
+                , "(datum : Option PlutusCore.Data.Data) (ctx :"
                 , "CardanoLedgerApi.V1.ScriptContext"
-                , "CardanoLedgerApi.V1.Contexts.hasDecodableRawFields"
+                , "CardanoLedgerApi.V1.Contexts.validScriptContext datum ctx = true"
                 )
               ,
                 ( PlutusV2
+                , "(datum : Option PlutusCore.Data.Data) (redeemer : PlutusCore.Data.Data) (ctx :"
                 , "CardanoLedgerApi.V2.ScriptContext"
-                , "CardanoLedgerApi.V2.Contexts.hasDecodableRawFields"
+                , "CardanoLedgerApi.V2.Contexts.validScriptContext datum redeemer ctx = true"
                 )
               ,
                 ( PlutusV3
+                , "(ctx :"
                 , "CardanoLedgerApi.V3.ScriptContext"
-                , "CardanoLedgerApi.V3.Contexts.hasDecodableRawFields"
+                , "CardanoLedgerApi.V3.Contexts.validScriptContext ctx = true"
                 )
               ]
     , testCase "V4 acceptance reports the missing ledger codec" $

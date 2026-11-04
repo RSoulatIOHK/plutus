@@ -67,12 +67,13 @@ expandPropertyTemplates modules = case concatMap errors expanded of
                       ]
                   ]
             Right
-              ( "The compiled script rejects every purpose outside {"
+              ( "The compiled script rejects every valid script context whose purpose is outside {"
                   <> T.intercalate ", " (map purposeToText (sort allowed))
                   <> "}."
               , "∀ "
                   <> (if null params then "" else T.unwords params <> " ")
                   <> "(ctx : CardanoLedgerApi.V3.ScriptContext),\n"
+                  <> "  ¬ (CardanoLedgerApi.V3.Contexts.validScriptContext ctx = true) ∨\n"
                   <> "  (match ctx.scriptContextScriptInfo with\n    "
                   <> T.intercalate "\n    " branches
                   <> ") ∨\n"
@@ -81,36 +82,36 @@ expandPropertyTemplates modules = case concatMap errors expanded of
                   <> ")"
               )
           AcceptsSomeContext -> do
-            (contextType, contextConditions) <- case version of
+            (contextType, extraBinders, validContext) <- case version of
               PlutusV1 ->
                 Right
                   ( "CardanoLedgerApi.V1.ScriptContext"
-                  , ["CardanoLedgerApi.V1.Contexts.hasDecodableRawFields ctx.scriptContextTxInfo = true"]
+                  , "(datum : Option PlutusCore.Data.Data) "
+                  , "CardanoLedgerApi.V1.Contexts.validScriptContext datum ctx = true"
                   )
               PlutusV2 ->
                 Right
                   ( "CardanoLedgerApi.V2.ScriptContext"
-                  , ["CardanoLedgerApi.V2.Contexts.hasDecodableRawFields ctx.scriptContextTxInfo = true"]
+                  , "(datum : Option PlutusCore.Data.Data) (redeemer : PlutusCore.Data.Data) "
+                  , "CardanoLedgerApi.V2.Contexts.validScriptContext datum redeemer ctx = true"
                   )
               PlutusV3 ->
                 Right
                   ( "CardanoLedgerApi.V3.ScriptContext"
-                  ,
-                    [ "CardanoLedgerApi.V3.Contexts.hasDecodableRawFields ctx.scriptContextTxInfo = true"
-                    , "CardanoLedgerApi.V3.Contexts.validScriptInfo ctx = true"
-                    , "CardanoLedgerApi.V3.Contexts.validMintValue ctx.scriptContextTxInfo.txInfoMint = true"
-                    ]
+                  , ""
+                  , "CardanoLedgerApi.V3.Contexts.validScriptContext ctx = true"
                   )
               PlutusV4 -> invalid "accepts-some-context requires a V4 ScriptContext codec in CardanoLedgerApiBlaster"
             Right
-              ( "The compiled script accepts at least one script context meeting the template's structural conditions."
+              ( "The compiled script accepts at least one valid script context."
               , "∀ "
                   <> (if null params then "" else T.unwords params <> " ")
+                  <> extraBinders
                   <> "(ctx : "
                   <> contextType
                   <> "),\n"
                   <> "  ¬ ("
-                  <> T.intercalate " ∧\n     " contextConditions
+                  <> validContext
                   <> " ∧\n"
                   <> "     PlutusCore.UPLC.Utils.isSuccessful ("
                   <> applied
