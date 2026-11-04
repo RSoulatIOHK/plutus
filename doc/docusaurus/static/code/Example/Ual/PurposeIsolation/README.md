@@ -44,7 +44,8 @@ The source annotations are sufficient:
 The native parameter is universally quantified in both formal claims. The
 acceptance template negates successful execution for every parameter and
 context, then expects a confirmed counterexample; that witness establishes the
-desired existential acceptance. The vulnerable script checks the
+desired existential acceptance. The parameterized script accepts a spending
+context when its native integer parameter is seven. The vulnerable script checks the
 transaction's range and treasury fields but omits purpose validation; it does not
 rely on changing a formal claim to obtain a counterexample.
 

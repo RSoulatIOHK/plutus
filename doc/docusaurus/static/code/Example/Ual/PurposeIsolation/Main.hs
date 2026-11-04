@@ -53,7 +53,7 @@ spendingAndMinting raw = let tag = purposeTag raw in check (tag == 1 || tag == 0
 @-}
 {-# INLINEABLE parameterizedSpending #-}
 parameterizedSpending :: Integer -> BuiltinData -> BuiltinUnit
-parameterizedSpending _ = spendingOnly
+parameterizedSpending n raw = check (n == 7 && purposeTag raw == 1)
 
 -- Intentionally vulnerable: ordinary transaction checks omit the purpose.
 {-@ ONCHAIN [version: PlutusV3] [steps: 1000, semantics: E]
