@@ -80,8 +80,8 @@ tests =
                   "isolation remains a universal rejection claim"
                   ("∀ parameter0 (ctx : CardanoLedgerApi.V3.ScriptContext)" `T.isInfixOf` propertyBody isolation)
                 assertBool
-                  "acceptance negates universal successful execution"
-                  ( "∀ parameter0 (ctx : CardanoLedgerApi.V3.ScriptContext),\n  ¬ PlutusCore.UPLC.Utils.isSuccessful"
+                  "acceptance searches for a well-formed successful execution"
+                  ( "∀ parameter0 (ctx : CardanoLedgerApi.V3.ScriptContext),\n  ¬ (CardanoLedgerApi.V3.Contexts.hasDecodableRawFields ctx.scriptContextTxInfo = true ∧\n     CardanoLedgerApi.V3.Contexts.validScriptInfo ctx = true ∧\n     CardanoLedgerApi.V3.Contexts.validMintValue ctx.scriptContextTxInfo.txInfoMint = true ∧\n     PlutusCore.UPLC.Utils.isSuccessful"
                       `T.isInfixOf` propertyBody acceptance
                   )
                 assertBool
@@ -114,18 +114,33 @@ tests =
           Left e -> assertFailure (show e)
           Right m ->
             mapM_
-              ( \(version, context) ->
+              ( \(version, context, decodableRawFields) ->
                   let scripts = [d {onchainVersion = Just version} | d <- ualOnchain m]
                    in case expandPropertyTemplates [m {ualOnchain = scripts}] of
-                        Right [expanded] ->
+                        Right [expanded] -> do
                           assertBool
                             "uses the context type for the script's version"
                             (any (T.isInfixOf context . propertyBody) (ualProperties expanded))
+                          assertBool
+                            "uses the decodability guard for the script's version"
+                            (any (T.isInfixOf decodableRawFields . propertyBody) (ualProperties expanded))
                         other -> assertFailure (show other)
               )
-              [ (PlutusV1, "CardanoLedgerApi.V1.ScriptContext")
-              , (PlutusV2, "CardanoLedgerApi.V2.ScriptContext")
-              , (PlutusV3, "CardanoLedgerApi.V3.ScriptContext")
+              [
+                ( PlutusV1
+                , "CardanoLedgerApi.V1.ScriptContext"
+                , "CardanoLedgerApi.V1.Contexts.hasDecodableRawFields"
+                )
+              ,
+                ( PlutusV2
+                , "CardanoLedgerApi.V2.ScriptContext"
+                , "CardanoLedgerApi.V2.Contexts.hasDecodableRawFields"
+                )
+              ,
+                ( PlutusV3
+                , "CardanoLedgerApi.V3.ScriptContext"
+                , "CardanoLedgerApi.V3.Contexts.hasDecodableRawFields"
+                )
               ]
     , testCase "V4 acceptance reports the missing ledger codec" $
         case parse "[scope: auction] [template: accepts-some-context]" of

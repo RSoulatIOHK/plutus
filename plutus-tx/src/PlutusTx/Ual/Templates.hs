@@ -81,21 +81,40 @@ expandPropertyTemplates modules = case concatMap errors expanded of
                   <> ")"
               )
           AcceptsSomeContext -> do
-            contextType <- case version of
-              PlutusV1 -> Right "CardanoLedgerApi.V1.ScriptContext"
-              PlutusV2 -> Right "CardanoLedgerApi.V2.ScriptContext"
-              PlutusV3 -> Right "CardanoLedgerApi.V3.ScriptContext"
+            (contextType, contextConditions) <- case version of
+              PlutusV1 ->
+                Right
+                  ( "CardanoLedgerApi.V1.ScriptContext"
+                  , ["CardanoLedgerApi.V1.Contexts.hasDecodableRawFields ctx.scriptContextTxInfo = true"]
+                  )
+              PlutusV2 ->
+                Right
+                  ( "CardanoLedgerApi.V2.ScriptContext"
+                  , ["CardanoLedgerApi.V2.Contexts.hasDecodableRawFields ctx.scriptContextTxInfo = true"]
+                  )
+              PlutusV3 ->
+                Right
+                  ( "CardanoLedgerApi.V3.ScriptContext"
+                  ,
+                    [ "CardanoLedgerApi.V3.Contexts.hasDecodableRawFields ctx.scriptContextTxInfo = true"
+                    , "CardanoLedgerApi.V3.Contexts.validScriptInfo ctx = true"
+                    , "CardanoLedgerApi.V3.Contexts.validMintValue ctx.scriptContextTxInfo.txInfoMint = true"
+                    ]
+                  )
               PlutusV4 -> invalid "accepts-some-context requires a V4 ScriptContext codec in CardanoLedgerApiBlaster"
             Right
-              ( "The compiled script succeeds for some typed script context."
+              ( "The compiled script accepts at least one script context meeting the template's structural conditions."
               , "∀ "
                   <> (if null params then "" else T.unwords params <> " ")
                   <> "(ctx : "
                   <> contextType
                   <> "),\n"
-                  <> "  ¬ PlutusCore.UPLC.Utils.isSuccessful ("
+                  <> "  ¬ ("
+                  <> T.intercalate " ∧\n     " contextConditions
+                  <> " ∧\n"
+                  <> "     PlutusCore.UPLC.Utils.isSuccessful ("
                   <> applied
-                  <> ")"
+                  <> "))"
               )
         Right
           p
