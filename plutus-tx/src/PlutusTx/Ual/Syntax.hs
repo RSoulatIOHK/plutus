@@ -97,7 +97,7 @@ data OnchainDecl = MkOnchainDecl
   deriving stock (Eq, Show)
 
 -- | A source-level recipe, expanded to an ordinary complete Lean proposition.
-data PropertyTemplate = PurposeIsolation [Purpose]
+data PropertyTemplate = PurposeIsolation [Purpose] | AcceptsSomeContext
   deriving stock (Eq, Show, Lift)
 
 data PropertyDecl = MkPropertyDecl

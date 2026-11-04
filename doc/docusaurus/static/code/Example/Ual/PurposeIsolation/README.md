@@ -1,4 +1,4 @@
-# Generated purpose-isolation properties
+# Generated purpose-isolation and acceptance properties
 
 Build the generator from the Plutus checkout:
 
@@ -14,11 +14,14 @@ checking-environment manifest as its sole argument. It writes `plutus.json`,
 cardano-blaster check plutus.json assurance.json --refresh-environment
 ```
 
-Five properties should verify: the three generated purpose-isolation claims for
-`spendingOnly`, `spendingAndMinting` and `parameterizedSpending`, and the positive
-acceptance claims for spending and minting. The generated claim for `uncheckedPurpose` should be
-falsified with a counterexample replayed against its compiled UPLC. Consequently,
-checking the complete demonstration bundle intentionally exits with code 1.
+The source generates two independent properties for each of the four scripts:
+purpose isolation and existence of an accepted typed context. The three
+purpose-isolation claims for `spendingOnly`, `spendingAndMinting` and
+`parameterizedSpending` should verify. The isolation claim for `uncheckedPurpose`
+should be falsified with a counterexample replayed against its compiled UPLC.
+The four acceptance claims should verify, demonstrating that none of these
+scripts simply rejects every context. The complete bundle therefore
+intentionally exits with code 1.
 
 The source annotations are sufficient:
 
@@ -26,23 +29,33 @@ The source annotations are sufficient:
 {-@ PROPERTY [scope: spendingOnly]
     [template: purpose-isolation spending]
 @-}
+{-@ PROPERTY [scope: spendingOnly]
+    [template: accepts-some-context]
+@-}
 {-@ PROPERTY [scope: spendingAndMinting]
     [template: purpose-isolation spending minting]
 @-}
+{-@ PROPERTY [scope: spendingAndMinting]
+    [template: accepts-some-context]
+@-}
 ```
 
-The native parameter is universally quantified. The vulnerable script checks the
+The native parameter is universally quantified in the isolation claim and
+existentially quantified in the separate acceptance claim. The vulnerable script checks the
 transaction's range and treasury fields but omits purpose validation; it does not
 rely on changing a formal claim to obtain a counterexample.
 
-Each template expands to an ordinary quantified Lean proposition in the assurance
-document. It requires actual evaluation failure for every typed context whose
-purpose is outside the explicitly supplied set. It does not infer that set from
-the blueprint. All four blueprint entries deliberately retain spending
-invocation metadata, including the script whose template also allows minting.
+Each annotation expands to its own ordinary quantified Lean proposition in the
+assurance document. Isolation requires actual evaluation failure for every typed
+context whose purpose is outside the explicitly supplied set; acceptance requires
+successful evaluation for at least one typed context, with no purpose restriction.
+Neither template infers a purpose from the blueprint. All four blueprint entries
+deliberately retain spending invocation metadata, including the script whose
+isolation template also allows minting.
 
-The template currently supports Plutus V3 scripts, raw `BuiltinData` context
-arguments and universal parameters. Unknown template names/purposes, duplicate
+Both templates currently support Plutus V3 scripts and raw `BuiltinData` context
+arguments. Isolation quantifies script parameters universally; acceptance
+quantifies them existentially. Unknown template names/purposes, duplicate
 purposes, a set allowing all purposes, missing or multiple scopes, functions,
 V1/V2 scripts and applied parameter bindings are diagnosed. Exhaustion of the
 verification step bound does not count as rejection. Typed contexts in this

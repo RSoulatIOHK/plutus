@@ -288,26 +288,39 @@ parseTemplate line scope template trailing = do
             line
             "a property template generates its id, description and formal body; trailing text is not allowed"
         )
-  purposes <- case Text.words template of
-    "purpose-isolation" : args@(_ : _) -> traverse parsePurpose args
+  (kind, suffix, description) <- case Text.words template of
+    "purpose-isolation" : args@(_ : _) -> do
+      purposes <- traverse parsePurpose args
+      if length purposes == length (List.nub purposes)
+        then Right ()
+        else Left (MalformedBlock line "duplicate allowed purpose")
+      if length purposes < 6
+        then Right ()
+        else Left (MalformedBlock line "purpose-isolation must exclude at least one purpose")
+      Right
+        ( PurposeIsolation purposes
+        , "_purpose_isolation"
+        , "The compiled script rejects every purpose outside its declared allowed purposes."
+        )
     ["purpose-isolation"] -> Left (MalformedBlock line "purpose-isolation requires at least one allowed purpose")
+    ["accepts-some-context"] ->
+      Right
+        ( AcceptsSomeContext
+        , "_accepts_some_context"
+        , "There exists a typed script context on which the compiled script terminates successfully."
+        )
+    "accepts-some-context" : _ -> Left (MalformedBlock line "accepts-some-context takes no arguments")
     name : _ -> Left (MalformedBlock line ("unknown PROPERTY template: " <> name))
     [] -> Left (MalformedBlock line "empty PROPERTY template")
-  if length purposes == length (List.nub purposes)
-    then Right ()
-    else Left (MalformedBlock line "duplicate allowed purpose")
-  if length purposes < 6
-    then Right ()
-    else Left (MalformedBlock line "purpose-isolation must exclude at least one purpose")
-  name <- validPropertyName line (target <> "_purpose_isolation")
+  name <- validPropertyName line (target <> suffix)
   pure
     MkPropertyDecl
       { propertyName = name
-      , propertyText = "The compiled script rejects every purpose outside its declared allowed purposes."
+      , propertyText = description
       , propertyBody = ""
       , propertyScope = scope
       , propertyLine = line
-      , propertyTemplate = Just (PurposeIsolation purposes)
+      , propertyTemplate = Just kind
       }
   where
     parsePurpose p = case p of

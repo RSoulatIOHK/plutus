@@ -61,6 +61,54 @@ tests =
                 "minting is also allowed"
                 (any (T.isInfixOf ".MintingScript _ => True" . propertyBody) (ualProperties expanded))
             _ -> assertFailure "expected one module"
+    , testCase "acceptance is generated as an independent existential property" $
+        case moduleUalFromSource (UalModuleName "Spec") $
+          T.unlines
+            [ "module Spec where"
+            , "{-@ ONCHAIN [version: PlutusV3] [steps: 100, semantics: E] auction :: Integer -> BuiltinData -> BuiltinUnit @-}"
+            , "{-@ PROPERTY [scope: auction] [template: purpose-isolation spending] @-}"
+            , "{-@ PROPERTY [scope: auction] [template: accepts-some-context] @-}"
+            ] of
+          Left e -> assertFailure (show e)
+          Right m -> case expandPropertyTemplates [m] of
+            Left es -> assertFailure (show es)
+            Right [expanded] -> case ualProperties expanded of
+              [isolation, acceptance] -> do
+                propertyName isolation @?= "auction_purpose_isolation"
+                propertyName acceptance @?= "auction_accepts_some_context"
+                assertBool
+                  "isolation remains a universal rejection claim"
+                  ("∀ parameter0 (ctx : CardanoLedgerApi.V3.ScriptContext)" `T.isInfixOf` propertyBody isolation)
+                assertBool
+                  "acceptance has its own existential over parameters and typed context"
+                  ( "Exists (fun parameter0 =>\n∃ (ctx : CardanoLedgerApi.V3.ScriptContext)"
+                      `T.isInfixOf` propertyBody acceptance
+                  )
+                assertBool
+                  "acceptance checks successful compiled execution"
+                  ("isSuccessful («auction» parameter0" `T.isInfixOf` propertyBody acceptance)
+                assertBool
+                  "acceptance has no purpose-isolation premise"
+                  (not ("scriptContextScriptInfo" `T.isInfixOf` propertyBody acceptance))
+              _ -> assertFailure "expected two independent generated properties"
+            _ -> assertFailure "expected one module"
+    , testCase "acceptance without script parameters quantifies only the context" $
+        case parse "[scope: auction] [template: accepts-some-context]" of
+          Left e -> assertFailure (show e)
+          Right m ->
+            let scripts = [d {onchainArgs = [MkUalArgument "BuiltinData" AsData]} | d <- ualOnchain m]
+             in case expandPropertyTemplates [m {ualOnchain = scripts}] of
+                  Left es -> assertFailure (show es)
+                  Right [expanded] -> case ualProperties expanded of
+                    [p] -> do
+                      assertBool
+                        "single existential context binder"
+                        ("∃ (ctx : CardanoLedgerApi.V3.ScriptContext)" `T.isInfixOf` propertyBody p)
+                      assertBool
+                        "no phantom parameter binder"
+                        (not ("parameter0" `T.isInfixOf` propertyBody p))
+                    _ -> assertFailure "expected one generated property"
+                  _ -> assertFailure "expected one module"
     , testCase "template target may be imported from another module" $
         case parse "[scope: auction] [template: purpose-isolation spending]" of
           Left e -> assertFailure (show e)
@@ -97,6 +145,7 @@ tests =
              , ("unknown purpose", "[scope: auction] [template: purpose-isolation spendng]")
              , ("duplicate purpose", "[scope: auction] [template: purpose-isolation spending spending]")
              , ("unknown template", "[scope: auction] [template: purpose-isolaton spending]")
+             , ("acceptance takes no arguments", "[scope: auction] [template: accepts-some-context spending]")
              ,
                ( "duplicate template"
                , "[scope: auction] [template: purpose-isolation spending] [template: purpose-isolation minting]"

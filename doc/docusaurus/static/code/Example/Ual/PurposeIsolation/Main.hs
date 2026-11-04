@@ -78,19 +78,11 @@ uncheckedPurpose raw = case unsafeDataAsConstr raw of
 {-@ PROPERTY [scope: parameterizedSpending] [template: purpose-isolation spending] @-}
 {-@ PROPERTY [scope: uncheckedPurpose] [template: purpose-isolation spending] @-}
 
--- Positive checks ensure the corrected examples do not simply reject everything.
-{-@ PROPERTY [scope: spendingOnly] spending_accepted
-    "The spending branch terminates successfully for every typed spending context."
-  : ∀ (ctx : ScriptContext),
-      (match ctx.scriptContextScriptInfo with | .SpendingScript _ _ => True | _ => False) →
-      isSuccessful (spendingOnly (toLedgerData ctx))
-@-}
-{-@ PROPERTY [scope: spendingAndMinting] minting_accepted
-    "The multi-purpose script also terminates successfully for every typed minting context."
-  : ∀ (ctx : ScriptContext),
-      (match ctx.scriptContextScriptInfo with | .MintingScript _ => True | _ => False) →
-      isSuccessful (spendingAndMinting (toLedgerData ctx))
-@-}
+-- Each positive claim is separate from its script's purpose-isolation claim.
+{-@ PROPERTY [scope: spendingOnly] [template: accepts-some-context] @-}
+{-@ PROPERTY [scope: spendingAndMinting] [template: accepts-some-context] @-}
+{-@ PROPERTY [scope: parameterizedSpending] [template: accepts-some-context] @-}
+{-@ PROPERTY [scope: uncheckedPurpose] [template: accepts-some-context] @-}
 
 spendingCode, multiCode, uncheckedCode :: PlutusTx.CompiledCode (BuiltinData -> BuiltinUnit)
 spendingCode = $$(PlutusTx.compile [||spendingOnly||])
