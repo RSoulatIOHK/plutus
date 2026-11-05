@@ -12,6 +12,7 @@ module PlutusTx.Ual.Syntax
   , OnchainKind (..)
   , OnchainDecl (..)
   , PropertyDecl (..)
+  , PropertyTemplate (..)
   , UalBlock (..)
   , ModuleUal (..)
   , emptyModuleUal
@@ -23,6 +24,7 @@ import Data.Text (Text)
 import Language.Haskell.TH.Syntax (Lift)
 import PlutusTx.Blueprint.Definition.Id (DefinitionId)
 import PlutusTx.Blueprint.PlutusVersion (PlutusVersion)
+import PlutusTx.Blueprint.Purpose (Purpose)
 import PlutusTx.Blueprint.Validator (ArgumentEncoding (..), ExecutionBudget (..))
 
 -- | A surface-language module name, e.g. @"MyContract.Types"@.
@@ -94,6 +96,10 @@ data OnchainDecl = MkOnchainDecl
   }
   deriving stock (Eq, Show)
 
+-- | A source-level recipe, expanded to an ordinary complete Lean proposition.
+data PropertyTemplate = PurposeIsolation [Purpose] | AcceptsSomeContext
+  deriving stock (Eq, Show, Lift)
+
 data PropertyDecl = MkPropertyDecl
   { propertyName :: Text
   , propertyText :: Text
@@ -103,6 +109,8 @@ data PropertyDecl = MkPropertyDecl
   , propertyScope :: [Text]
   -- ^ Explicit ONCHAIN ids; empty permits the single-validator shorthand.
   , propertyLine :: Int
+  , propertyTemplate :: Maybe PropertyTemplate
+  -- ^ Nothing for a handwritten proposition; retained after expansion.
   }
   deriving stock (Eq, Show, Lift)
 

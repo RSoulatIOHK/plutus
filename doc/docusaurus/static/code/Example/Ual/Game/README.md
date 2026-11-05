@@ -6,8 +6,7 @@ arguments and tests decoding failures as well as success. It does not rebuild
 the old off-chain application or its address-diversifying GameParam.
 
 Build `docusaurus-examples:exe:example-ual-game`, then run the resulting executable
-as `example-ual-game environment.json` in an output directory. The environment
-manifest is captured by PlutusCoreBlaster before generation. It writes the draft
+as `example-ual-game environment.json` in an output directory. It writes the draft
 CIP-57 compiled-interface `plutus.json`, assurance-v2 `assurance.json`, and separate
 digest-bound checking contexts. The blueprint contains invocation roles and schema
 references; the contexts contain execution bounds and semantics. Compilation emits claims, not
@@ -24,7 +23,11 @@ checks all three properties afresh, executes a concrete hash vector, and records
 the inputs and tool versions. See that repository's
 `Tests/BlueprintVerify/README.md` for the complete commands and trust boundary.
 The checked-in JSON files are a generated snapshot with no verification evidence.
-Their small environment file is an illustrative placeholder. Capture the actual
-Lean/module/solver environment before generating an executable bundle. The fresh runner produces a
+Their small `environment.json` is an illustrative placeholder, not a compiler
+output or a verified environment. In the VS Code workflow, you can remove all
+JSON files from this example: the extension infers the Cabal target, creates its
+project manifest, and creates a bootstrap environment reference in its isolated
+output directory. `cardano-blaster check ... --refresh-environment` then captures the
+actual Lean/module/solver environment for the verification run. The fresh runner produces a
 separate evidence-bearing document with `checkingContextHash` after successful
 checks. The old UAL 0.5 fixture remains in PlutusCoreBlaster's regression suite.

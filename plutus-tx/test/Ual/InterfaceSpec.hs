@@ -10,8 +10,10 @@ import Data.Either (isLeft)
 import Data.List (isInfixOf)
 import Data.Set qualified as Set
 import PlutusTx.Assurance.Interface (interfaceBlueprint)
+import PlutusTx.Assurance.SourceTypes (sourceTypesManifest)
 import PlutusTx.Blueprint
 import PlutusTx.Builtins (BuiltinData)
+import PlutusTx.Ual.Parser (parseBlock)
 import PlutusTx.Ual.Syntax
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
@@ -68,6 +70,13 @@ tests =
             assertBool "dialect" ("compiled-interface/v1/schema.json" `isInfixOf` output)
             assertBool "budget is separate" (not ("\"budget\"" `isInfixOf` output))
             assertBool "no encoding override" (not ("\"encoding\"" `isInfixOf` output))
+    , testCase "source types are bound to the blueprint without changing CIP-57 JSON" $ do
+        let output = LBS.unpack (encode (sourceTypesManifest "abc123" bp))
+        assertBool "format" ("plinth-source-types-v1" `isInfixOf` output)
+        assertBool "blueprint digest" ("abc123" `isInfixOf` output)
+        assertBool "validator id" ("\"test\"" `isInfixOf` output)
+        assertBool "redeemer type provenance" ("BuiltinData" `isInfixOf` output)
+        assertBool "absent datum remains absent" ("\"datum\":null" `isInfixOf` output)
     , testCase "Data annotation cannot relabel a native parameter" $
         assertBool "encoding mismatch rejected" (isLeft (interfaceBlueprint [annotations AsData] bp))
     , testCase "Scott annotation is explicitly unsupported" $
@@ -76,4 +85,17 @@ tests =
         let m = annotations AsNative
             ds = [d {onchainResolvedArgs = []} | d <- ualOnchain m]
          in assertBool "unresolved rejected" (isLeft (interfaceBlueprint [m {ualOnchain = ds}] bp))
+    , testCase "template assertion is independent of blueprint purposes" $
+        case parseBlock (MkRawBlock KProperty "[scope: test] [template: purpose-isolation spending]" 1) of
+          Right (BProperty p) ->
+            let m = (annotations AsNative) {ualProperties = [p]}
+             in case interfaceBlueprint [m] bp of
+                  Left err -> assertFailure err
+                  Right value -> do
+                    let output = LBS.unpack (encode value)
+                    assertBool "existing mint invocation is preserved" ("\"purpose\":\"mint\"" `isInfixOf` output)
+                    assertBool
+                      "template does not add a spending invocation"
+                      (not ("\"purpose\":\"spend\"" `isInfixOf` output))
+          _ -> assertFailure "expected a parsed template"
     ]
