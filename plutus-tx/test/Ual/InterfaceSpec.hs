@@ -10,6 +10,7 @@ import Data.Either (isLeft)
 import Data.List (isInfixOf)
 import Data.Set qualified as Set
 import PlutusTx.Assurance.Interface (interfaceBlueprint)
+import PlutusTx.Assurance.SourceTypes (sourceTypesManifest)
 import PlutusTx.Blueprint
 import PlutusTx.Builtins (BuiltinData)
 import PlutusTx.Ual.Parser (parseBlock)
@@ -69,6 +70,13 @@ tests =
             assertBool "dialect" ("compiled-interface/v1/schema.json" `isInfixOf` output)
             assertBool "budget is separate" (not ("\"budget\"" `isInfixOf` output))
             assertBool "no encoding override" (not ("\"encoding\"" `isInfixOf` output))
+    , testCase "source types are bound to the blueprint without changing CIP-57 JSON" $ do
+        let output = LBS.unpack (encode (sourceTypesManifest "abc123" bp))
+        assertBool "format" ("plinth-source-types-v1" `isInfixOf` output)
+        assertBool "blueprint digest" ("abc123" `isInfixOf` output)
+        assertBool "validator id" ("\"test\"" `isInfixOf` output)
+        assertBool "redeemer type provenance" ("BuiltinData" `isInfixOf` output)
+        assertBool "absent datum remains absent" ("\"datum\":null" `isInfixOf` output)
     , testCase "Data annotation cannot relabel a native parameter" $
         assertBool "encoding mismatch rejected" (isLeft (interfaceBlueprint [annotations AsData] bp))
     , testCase "Scott annotation is explicitly unsupported" $

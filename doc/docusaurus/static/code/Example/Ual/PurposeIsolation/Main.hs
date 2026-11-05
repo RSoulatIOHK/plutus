@@ -13,12 +13,13 @@ module Main where
 
 import Data.ByteString.Short qualified as SBS
 import Data.Set qualified as Set
+import Example.Ual.PurposeIsolation.Types (WitnessRedeemer)
 import PlutusLedgerApi.V1.Interval qualified as Interval
 import PlutusLedgerApi.V3 (serialiseCompiledCode)
 import PlutusTx qualified
 import PlutusTx.Assurance
 import PlutusTx.Blueprint
-import PlutusTx.Builtins (equalsData, unsafeDataAsConstr)
+import PlutusTx.Builtins (equalsData, unsafeDataAsB, unsafeDataAsConstr)
 import PlutusTx.Prelude
 import PlutusTx.Ual (ModuleUal)
 import PlutusTx.Ual.TH (ualModule)
@@ -62,11 +63,13 @@ parameterizedSpending n raw = check (n == 7 && purposeTag raw == 1)
 {-# INLINEABLE uncheckedPurpose #-}
 uncheckedPurpose :: BuiltinData -> BuiltinUnit
 uncheckedPurpose raw = case unsafeDataAsConstr raw of
-  (contextTag, [txInfo, _, _]) | contextTag == 0 -> case unsafeDataAsConstr txInfo of
+  (contextTag, [txInfo, redeemer, _]) | contextTag == 0 -> case unsafeDataAsConstr txInfo of
     (infoTag, [_, _, _, _, _, _, _, range, _, _, _, _, _, _, treasury, donation])
       | infoTag == 0 ->
           check
-            ( equalsData range (toBuiltinData (Interval.always :: Interval.Interval Integer))
+            ( lengthOfByteString (unsafeDataAsB redeemer)
+                == 3
+                && equalsData range (toBuiltinData (Interval.always :: Interval.Interval Integer))
                 && equalsData treasury (toBuiltinData (Nothing :: Maybe Integer))
                 && equalsData donation (toBuiltinData (Nothing :: Maybe Integer))
             )
@@ -110,7 +113,14 @@ blueprint =
               , -- These are invocation metadata. Template parameters independently
                 -- define the assertion, including the spending+minting claim above.
                 validatorRedeemer =
-                  MkArgumentBlueprint Nothing Nothing (Set.singleton Spend) (definitionRef @BuiltinData)
+                  MkArgumentBlueprint
+                    Nothing
+                    Nothing
+                    (Set.singleton Spend)
+                    ( if ident Haskell.== "uncheckedPurpose"
+                        then definitionRef @WitnessRedeemer
+                        else definitionRef @BuiltinData
+                    )
               , validatorCompiled = Just (compiledValidator PlutusV3 (SBS.fromShort bytes))
               }
           | (ident, bytes) <-
@@ -120,7 +130,7 @@ blueprint =
               , ("parameterizedSpending", serialiseCompiledCode parameterizedCode)
               ]
           ]
-    , contractDefinitions = deriveDefinitions @'[BuiltinData, Integer]
+    , contractDefinitions = deriveDefinitions @'[BuiltinData, Integer, WitnessRedeemer]
     }
 
 $(Haskell.pure [])

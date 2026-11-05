@@ -38,6 +38,7 @@ import PlutusCore.Flat.Encoder (strictEncoder)
 import PlutusCore.Flat.Filler (Filler (FillerEnd))
 import PlutusTx.Assurance.Build (buildAssurance)
 import PlutusTx.Assurance.Document
+import PlutusTx.Assurance.SourceTypes (sourceTypesManifest)
 import PlutusTx.Assurance.Write (blueprintRef)
 import PlutusTx.Blueprint.Contract (ContractBlueprint)
 import PlutusTx.Blueprint.Definition.Id (definitionIdToText)
@@ -487,3 +488,5 @@ writeInterfaceBundleWithBindings environment preamble defaultId modules bp artif
           set "languages" langs $
             set "checkingContexts" (Object (KM.fromList [(Key.fromText k, v) | (k, v) <- contexts])) $
               set "properties" (toJSON props) doc
+  blueprintBytes <- BS.readFile "plutus.json"
+  write "source-types.json" (sourceTypesManifest (hex (sha2_256 blueprintBytes)) bp)

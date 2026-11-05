@@ -60,6 +60,7 @@ library
     PlutusTx.Assurance.Build
     PlutusTx.Assurance.Document
     PlutusTx.Assurance.Interface
+    PlutusTx.Assurance.SourceTypes
     PlutusTx.Assurance.Write
     PlutusTx.Base
     PlutusTx.Blueprint
