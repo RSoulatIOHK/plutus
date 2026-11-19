@@ -60,6 +60,7 @@ library
     PlutusTx.Assurance.Build
     PlutusTx.Assurance.Document
     PlutusTx.Assurance.Interface
+    PlutusTx.Assurance.SourceTypes
     PlutusTx.Assurance.Write
     PlutusTx.Base
     PlutusTx.Blueprint
@@ -133,6 +134,7 @@ library
     PlutusTx.Ual.Parser
     PlutusTx.Ual.Resolve
     PlutusTx.Ual.Syntax
+    PlutusTx.Ual.Templates
     PlutusTx.Ual.TH
     PlutusTx.Utils
 
@@ -260,6 +262,7 @@ test-suite plutus-tx-test
     Ual.Parser.Spec
     Ual.Resolve.Spec
     Ual.Spec
+    Ual.TemplatesSpec
 
   hs-source-dirs: test
   build-depends:

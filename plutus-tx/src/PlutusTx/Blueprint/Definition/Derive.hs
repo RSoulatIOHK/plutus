@@ -10,6 +10,7 @@
 
 module PlutusTx.Blueprint.Definition.Derive where
 
+import Data.Typeable (Typeable)
 import PlutusTx.Blueprint.Class (HasBlueprintSchema (..))
 import PlutusTx.Blueprint.Definition.Internal (Definition (..), Definitions (..), addDefinition)
 import PlutusTx.Blueprint.Definition.Unroll
@@ -49,6 +50,7 @@ instance DefinitionsFor' referencedTypes '[] where
 instance
   ( HasBlueprintDefinition t
   , HasBlueprintSchema t referencedTypes
+  , Typeable t
   , DefinitionsFor' referencedTypes ts
   )
   => DefinitionsFor' referencedTypes (t ': ts)
@@ -56,4 +58,4 @@ instance
   definitionsFor' =
     addDefinition
       (definitionsFor' @referencedTypes @ts)
-      (MkDefinition (definitionId @t) (schema @t))
+      (MkDefinition @t (definitionId @t) (schema @t))

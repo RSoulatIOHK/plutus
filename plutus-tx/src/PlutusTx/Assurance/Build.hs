@@ -19,8 +19,10 @@ import PlutusTx.Ual.Syntax
   ( ModuleUal (..)
   , OnchainDecl (..)
   , PropertyDecl (..)
+  , PropertyTemplate (AcceptsSomeContext)
   , UalModuleName (..)
   )
+import PlutusTx.Ual.Templates (expandPropertyTemplates)
 
 -- | The @languages@ registry key this producer uses.
 ualLanguageKey :: Text
@@ -60,6 +62,11 @@ buildAssurance
   -> [ModuleUal]
   -> Either [UalError] AssuranceDocument
 buildAssurance preamble ref defaultValidator modules =
+  expandPropertyTemplates modules >>= buildExpandedAssurance preamble ref defaultValidator
+
+buildExpandedAssurance
+  :: AssurancePreamble -> BlueprintRef -> Text -> [ModuleUal] -> Either [UalError] AssuranceDocument
+buildExpandedAssurance preamble ref defaultValidator modules =
   case sort
     (dupPropertyErrors <> moduleErrors <> scopeErrors <> authorErrors <> cycleErrors <> noPropertyErrors) of
     [] ->
@@ -139,10 +146,15 @@ buildAssurance preamble ref defaultValidator modules =
                     Just
                       MkFormalStatement
                         { formalLanguage = ualLanguageKey
-                        , formalUses = if Set.member mname fragmentIds then [mname] else importsOf m
+                        , formalUses = case propertyTemplate p of
+                            Just _ -> []
+                            Nothing -> if Set.member mname fragmentIds then [mname] else importsOf m
                         , formalSource = propertyBody p
                         }
                 }
+          , propertyTags = case propertyTemplate p of
+              Just AcceptsSomeContext -> ["expect:falsified"]
+              _ -> []
           }
       | m <- modules
       , let mname = nameOf (ualModuleName m)

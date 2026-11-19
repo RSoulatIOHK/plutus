@@ -8,7 +8,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -23,13 +25,17 @@ import Prelude
 import Data.Kind (Constraint, Type)
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Proxy (Proxy (..))
+import Data.Typeable (TypeRep, Typeable, typeRep)
 import GHC.TypeLits qualified as GHC
 import PlutusTx.Blueprint.Definition.Id (DefinitionId)
 import PlutusTx.Blueprint.Schema (Schema (..))
 
 -- | A schema definition of a type @t@ with a list of referenced types @ts@.
-data Definition t ts = MkDefinition DefinitionId (Schema ts)
-  deriving stock (Show)
+data Definition t ts where
+  MkDefinition :: Typeable t => DefinitionId -> Schema ts -> Definition t ts
+
+deriving stock instance Show (Definition t ts)
 
 -- | A registry of schema definitions.
 data Definitions ts where
@@ -47,6 +53,17 @@ definitionsToMap :: Definitions ts -> (forall xs. Schema xs -> v) -> Map Definit
 definitionsToMap NoDefinitions _k = Map.empty
 definitionsToMap (AddDefinition (MkDefinition defId v) s) k =
   Map.insert defId (k v) (definitionsToMap s k)
+
+{-| Retain the Haskell type represented by each blueprint definition. The
+ordinary CIP-57 JSON remains unchanged; consumers can use this provenance
+to select the project's own FromData instance for a replayed Data value. -}
+definitionsToTypeReps :: Definitions ts -> Map DefinitionId TypeRep
+definitionsToTypeReps NoDefinitions = Map.empty
+definitionsToTypeReps (AddDefinition d@(MkDefinition defId _) rest) =
+  Map.insert defId (definitionTypeRep d) (definitionsToTypeReps rest)
+
+definitionTypeRep :: forall t ts. Definition t ts -> TypeRep
+definitionTypeRep (MkDefinition _ _) = typeRep (Proxy @t)
 
 {-|
   A constraint that checks if a schema definition is present in a list of schema definitions.

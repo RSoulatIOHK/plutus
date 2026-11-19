@@ -16,6 +16,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Read qualified as Text.Read
 import PlutusTx.Blueprint.PlutusVersion (PlutusVersion (..))
+import PlutusTx.Blueprint.Purpose (Purpose (..))
 import PlutusTx.Ual.Error (UalError (..))
 import PlutusTx.Ual.Lexer (lexModule)
 import PlutusTx.Ual.Syntax
@@ -27,6 +28,7 @@ import PlutusTx.Ual.Syntax
   , OnchainDecl (..)
   , OnchainKind (..)
   , PropertyDecl (..)
+  , PropertyTemplate (..)
   , RawBlock (..)
   , UalArgument (..)
   , UalBlock (..)
@@ -231,7 +233,10 @@ parseProperty :: Int -> Text -> Either UalError PropertyDecl
 parseProperty line body = do
   (opts, afterOptions) <- takeOptions line (Text.stripStart body)
   mapM_
-    ( \(k, _) -> if k == "scope" then Right () else Left (MalformedBlock line ("unknown PROPERTY option: " <> k))
+    ( \(k, _) ->
+        if k `elem` ["scope", "template"]
+          then Right ()
+          else Left (MalformedBlock line ("unknown PROPERTY option: " <> k))
     )
     opts
   let scopes = [v | ("scope", v) <- opts]
@@ -240,6 +245,13 @@ parseProperty line body = do
   if not (null scopes) && null scope
     then Left (MalformedBlock line "scope must not be empty")
     else Right ()
+  case [t | ("template", t) <- opts] of
+    [] -> parseExplicitProperty line scope afterOptions
+    [t] -> parseTemplate line scope t afterOptions
+    _ -> Left (MalformedBlock line "duplicate template option")
+
+parseExplicitProperty :: Int -> [Text] -> Text -> Either UalError PropertyDecl
+parseExplicitProperty line scope afterOptions = do
   let afterName = Text.stripStart afterOptions
       (nameText, rest0) = Text.break (\c -> c == '"' || c == ':') afterName
   (text, rest1) <- takeQuoted line (Text.stripStart rest0)
@@ -260,7 +272,65 @@ parseProperty line body = do
       , propertyBody = formal
       , propertyScope = scope
       , propertyLine = line
+      , propertyTemplate = Nothing
       }
+
+parseTemplate :: Int -> [Text] -> Text -> Text -> Either UalError PropertyDecl
+parseTemplate line scope template trailing = do
+  target <- case scope of
+    [s] -> Right s
+    _ -> Left (MalformedBlock line "a property template requires exactly one explicit scope")
+  if Text.null (Text.strip trailing)
+    then Right ()
+    else
+      Left
+        ( MalformedBlock
+            line
+            "a property template generates its id, description and formal body; trailing text is not allowed"
+        )
+  (kind, suffix, description) <- case Text.words template of
+    "purpose-isolation" : args@(_ : _) -> do
+      purposes <- traverse parsePurpose args
+      if length purposes == length (List.nub purposes)
+        then Right ()
+        else Left (MalformedBlock line "duplicate allowed purpose")
+      if length purposes < 6
+        then Right ()
+        else Left (MalformedBlock line "purpose-isolation must exclude at least one purpose")
+      Right
+        ( PurposeIsolation purposes
+        , "_purpose_isolation"
+        , "The compiled script rejects every purpose outside its declared allowed purposes."
+        )
+    ["purpose-isolation"] -> Left (MalformedBlock line "purpose-isolation requires at least one allowed purpose")
+    ["accepts-some-context"] ->
+      Right
+        ( AcceptsSomeContext
+        , "_accepts_some_context"
+        , "There exists a typed script context on which the compiled script terminates successfully."
+        )
+    "accepts-some-context" : _ -> Left (MalformedBlock line "accepts-some-context takes no arguments")
+    name : _ -> Left (MalformedBlock line ("unknown PROPERTY template: " <> name))
+    [] -> Left (MalformedBlock line "empty PROPERTY template")
+  name <- validPropertyName line (target <> suffix)
+  pure
+    MkPropertyDecl
+      { propertyName = name
+      , propertyText = description
+      , propertyBody = ""
+      , propertyScope = scope
+      , propertyLine = line
+      , propertyTemplate = Just kind
+      }
+  where
+    parsePurpose p = case p of
+      "spending" -> Right Spend
+      "minting" -> Right Mint
+      "rewarding" -> Right Withdraw
+      "certifying" -> Right Publish
+      "voting" -> Right Vote
+      "proposing" -> Right Propose
+      _ -> Left (MalformedBlock line ("unknown template purpose: " <> p))
 
 {-| A property name becomes the assurance document's @properties[].id@, whose
 schema constrains it to @^[A-Za-z0-9_-]+$@ and requires it. Rejecting a bad name

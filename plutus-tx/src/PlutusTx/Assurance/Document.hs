@@ -157,6 +157,7 @@ data Property = MkProperty
   {-^ @scope.validators@: required and @minItems: 1@, so an empty list emits
   @[]@ and yields a document the CIP's schema rejects. Not enforced here. -}
   , propertyStatement :: Statement
+  , propertyTags :: [Text]
   }
   deriving stock (Eq, Show)
 
@@ -167,6 +168,7 @@ instance ToJSON Property where
         . requiredField "scope" (Aeson.object ["validators" Aeson..= propertyValidators])
         . requiredField "statement" propertyStatement
         . optionalField "title" propertyTitle
+        . optionalField "tags" (NE.nonEmpty propertyTags)
 
 data Statement = MkStatement
   { statementText :: Text

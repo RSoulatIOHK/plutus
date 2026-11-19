@@ -38,6 +38,7 @@ import PlutusCore.Flat.Encoder (strictEncoder)
 import PlutusCore.Flat.Filler (Filler (FillerEnd))
 import PlutusTx.Assurance.Build (buildAssurance)
 import PlutusTx.Assurance.Document
+import PlutusTx.Assurance.SourceTypes (sourceTypesManifest)
 import PlutusTx.Assurance.Write (blueprintRef)
 import PlutusTx.Blueprint.Contract (ContractBlueprint)
 import PlutusTx.Blueprint.Definition.Id (definitionIdToText)
@@ -51,6 +52,7 @@ import PlutusTx.Ual.Syntax
   , ModuleUal (..)
   , OnchainDecl (..)
   , OnchainKind (..)
+  , PropertyDecl (..)
   , ResolvedArgument (..)
   , UalArgument (..)
   )
@@ -348,6 +350,15 @@ writeInterfaceBundleWithBindings environment preamble defaultId modules bp artif
   assurance <- die (either (Left . show) Right (buildAssurance preamble ref defaultId modules))
   let bindingIds = [(pid, vid) | (pid, vid, _) <- bindings]
   unless (length bindingIds == length (nub bindingIds)) (fail "duplicate applied binding")
+  let generatedIds =
+        [ propertyName p
+        | m <- modules
+        , p <- ualProperties m
+        , Just _ <- [propertyTemplate p]
+        ]
+  unless
+    (all (\(pid, _) -> pid `notElem` generatedIds) bindingIds)
+    (fail "property templates currently require universal parameters; applied bindings are unsupported")
   forM_ bindingIds $ \(pid, vid) ->
     unless
       ( any
@@ -377,7 +388,14 @@ writeInterfaceBundleWithBindings environment preamble defaultId modules bp artif
             [ev] -> Right ev
             _ -> Left "extended target is missing or ambiguous"
           invs <- die (field "interface" ev >>= field "invocations" >>= array)
-          inv <- die $ case invs of [i] -> Right i; _ -> Left "UAL profile requires one invocation purpose per target"
+          -- V3 has one identical calling convention for all purposes. Selecting
+          -- an invocation binds the ABI; it must not filter the context value
+          -- passed to the compiled script by a purpose-isolation property.
+          convention <- die (field "interface" ev >>= field "callingConvention" >>= text)
+          inv <- die $ case invs of
+            [i] -> Right i
+            i : _ | convention == "ledger-v3" -> Right i
+            _ -> Left "UAL profile requires one invocation purpose per V1/V2 target"
           purpose <- die (field "purpose" inv)
           budget <- die (field "budget" v)
           steps <- die (field "steps" budget)
@@ -470,3 +488,5 @@ writeInterfaceBundleWithBindings environment preamble defaultId modules bp artif
           set "languages" langs $
             set "checkingContexts" (Object (KM.fromList [(Key.fromText k, v) | (k, v) <- contexts])) $
               set "properties" (toJSON props) doc
+  blueprintBytes <- BS.readFile "plutus.json"
+  write "source-types.json" (sourceTypesManifest (hex (sha2_256 blueprintBytes)) bp)

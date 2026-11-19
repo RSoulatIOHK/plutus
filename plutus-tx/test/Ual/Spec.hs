@@ -9,6 +9,7 @@ import Ual.InterfaceSpec qualified
 import Ual.Lexer.Spec qualified
 import Ual.Parser.Spec qualified
 import Ual.Resolve.Spec qualified
+import Ual.TemplatesSpec qualified
 
 tests :: TestTree
 tests =
@@ -22,4 +23,5 @@ tests =
     , Ual.Lexer.Spec.tests
     , Ual.Parser.Spec.tests
     , Ual.Resolve.Spec.tests
+    , Ual.TemplatesSpec.tests
     ]
