@@ -5,7 +5,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { parseArgs } = require('node:util');
 
+const { generatorProperties, withoutComments } = require('./ual-properties');
+
 const usage = 'Usage: node scripts/blueprints/list-generators.js [ROOT | PACKAGE.cabal] [--source FILE.hs] [--environment FILE.json]\nROOT defaults to the current directory.';
+
+function shellQuote(arg) {
+  if (arg.length && !/[^a-zA-Z0-9_./:+-]/.test(arg)) return arg;
+  return "'" + arg.replaceAll("'", "'\\''") + "'";
+}
 
 function packageFiles(root) {
   if (!fs.statSync(root).isDirectory()) {
@@ -60,24 +67,33 @@ function listGenerators(packageFile, selectedSource, environment) {
     const resolveFile = name => roots.map(root => path.resolve(dir, root, name)).find(f => fs.existsSync(f));
     const mainFile = resolveFile(main);
     if (!mainFile) continue;
-    const hs = fs.readFileSync(mainFile, 'utf8').replace(/{-[\s\S]*?-}|--[^\n]*/g, '');
+    const mainText = fs.readFileSync(mainFile, 'utf8');
+    const hs = withoutComments(mainText);
     const binding = /^main[ \t]*=/m.exec(hs);
     if (!binding) continue;
     const mainBody = hs.slice(binding.index + binding[0].length).split(/\n(?=\S)/, 1)[0];
     if (!/\bdefaultMainInterfaceBundle(?:WithBindings)?\b/.test(mainBody)) continue;
     const modules = (fields.get('other-modules') || '').split(/[\s,]+/).filter(Boolean);
-    const sources = [mainFile, ...modules.map(m => resolveFile(m.replaceAll('.', '/') + '.hs')).filter(Boolean)];
+    const moduleFiles = new Map(modules.map(name => [name, resolveFile(name.replaceAll('.', '/') + '.hs')])
+      .filter(([, file]) => file));
+    const sources = [mainFile, ...moduleFiles.values()];
     if (selectedSource && !sources.includes(path.resolve(selectedSource))) continue;
 
     const target = packageName + ':exe:' + exe;
     const localEnv = path.join(path.dirname(mainFile), 'environment.json');
     const env = environment || (fs.existsSync(localEnv) ? localEnv : null);
+    const argv = ['cabal', 'run', '-v0', target, '--', '--ndjson', '--environment',
+      env ? path.relative(cwd, env) : '<environment.json>'];
+    const mainSource = { file: path.relative(cwd, mainFile), text: mainText };
+    const moduleSources = new Map([...moduleFiles].map(([name, file]) =>
+      [name, { file: path.relative(cwd, file), text: fs.readFileSync(file, 'utf8') }]));
     entries.push({
       target, cwd, main: path.relative(cwd, mainFile),
       sources: sources.map(f => path.relative(cwd, f)),
+      ...generatorProperties(mainSource, mainBody, moduleSources),
       needsEnvironment: !env,
-      argv: ['cabal', 'run', '-v0', target, '--', '--ndjson', '--environment',
-        env ? path.relative(cwd, env) : '<environment.json>'],
+      argv,
+      command: argv.map(shellQuote).join(' '),
     });
   }
   return entries;
