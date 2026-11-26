@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "UAL generator artifact",
+  "description": "One parsed line of a bundle generator's --ndjson output. Decode content according to encoding to reproduce the artifact's exact bytes.",
+  "type": "object",
+  "required": ["path", "encoding", "content"],
+  "additionalProperties": false,
+  "properties": {
+    "path": { "type": "string", "minLength": 1, "description": "Artifact path relative to the bundle directory." },
+    "encoding": { "enum": ["utf8", "base16"] },
+    "content": { "type": "string", "description": "Exact document text for utf8 or lowercase hexadecimal byte pairs for base16." }
+  },
+  "if": { "properties": { "encoding": { "const": "base16" } } },
+  "then": { "properties": { "content": { "type": "string", "pattern": "^(?:[0-9a-f]{2})*$" } } }
+}

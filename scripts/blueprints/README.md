@@ -35,3 +35,13 @@ The generated assurance document supplies the runtime order in that case.
 
 The source scanner is available as `propertyBlocks(file, text)` from
 `./ual-properties.js`, so an editor can pass an unsaved document's text.
+
+The extension can use two JSON Schemas for the CLI outputs:
+
+- Validate the entire parsed discovery array against
+  [list-generators.schema.json](list-generators.schema.json).
+- With `--ndjson`, parse each line separately and validate it against
+  [generator-artifact.schema.json](generator-artifact.schema.json). For JSON
+  artifacts, parse the UTF-8 `content` string to inspect the inner document.
+  To materialize the bundle, preserve that string exactly or hex-decode
+  `base16` content. Check the generator's exit status for stream completion.
