@@ -76,6 +76,7 @@ lexModule src = do
 
     kindOf :: Int -> Text -> Either UalError BlockKind
     kindOf line keyword = case keyword of
+      "INCLUDE" -> Right KInclude
       "ONCHAIN" -> Right KOnchain
       "PREDICATE" -> Right KPredicate
       "PROPERTY" -> Right KProperty

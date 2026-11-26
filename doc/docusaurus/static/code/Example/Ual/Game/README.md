@@ -6,11 +6,36 @@ arguments and tests decoding failures as well as success. It does not rebuild
 the old off-chain application or its address-diversifying GameParam.
 
 Build `docusaurus-examples:exe:example-ual-game`, then run the resulting executable
-as `example-ual-game environment.json` in an output directory. It writes the draft
+as `example-ual-game` in an output directory. It writes an unpinned
+`environment.json` and the draft
 CIP-57 compiled-interface `plutus.json`, assurance-v2 `assurance.json`, and separate
 digest-bound checking contexts. The blueprint contains invocation roles and schema
 references; the contexts contain execution bounds and semantics. Compilation emits claims, not
 verification evidence.
+
+To stream the same bundle to stdout, run the following from the repository root.
+Use `--environment FILE` to bundle an existing manifest instead.
+
+```sh
+cabal run -v0 docusaurus-examples:exe:example-ual-game -- --ndjson
+```
+
+Each NDJSON line has a `path`, an `encoding`, and a `content` string. For
+`utf8` records, `content` is the exact JSON file text including its final
+newline. Parse it as JSON to inspect the document, or encode it as UTF-8 to
+reproduce its digest. Generators with binary artifacts use `base16` for those
+records. Each record is flushed as it is produced. Check the exit status before
+treating the bundle as complete.
+
+To test streaming from the repository root, build Game and pass its executable
+to the smoke test. The test runs both output modes in a temporary directory,
+compares each artifact byte for byte, and checks the assurance references.
+
+```sh
+target=docusaurus-examples:exe:example-ual-game
+cabal build "$target" &&
+  python3 doc/docusaurus/static/code/Example/Ual/Game/test-stream.py "$(cabal list-bin "$target")"
+```
 
 The UAL 1.0 properties use the stable `gameValidator` binding; the display title
 is `Guess the secret`. SHA-256 is opaque to the solver, so the quantified claims

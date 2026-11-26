@@ -32,9 +32,9 @@ newtype UalModuleName = UalModuleName Text
   deriving stock (Eq, Ord, Show, Lift)
 
 {-| Which kind of UAL block this is. The @K@ prefix is load-bearing: 'UalBlock'
-lives in this module too and has the same four variants, so the bare names
+lives in this module too and has corresponding variants, so the bare names
 would clash. -}
-data BlockKind = KOnchain | KPredicate | KProperty | KUplcData
+data BlockKind = KOnchain | KPredicate | KProperty | KUplcData | KInclude
   deriving stock (Eq, Ord, Show)
 
 {-| A @{\-\@@ … @\@-\}@ block exactly as the lexer found it: the kind keyword, and
@@ -115,10 +115,11 @@ data PropertyDecl = MkPropertyDecl
   deriving stock (Eq, Show, Lift)
 
 {-| A parsed UAL block. The @B@ prefix is load-bearing: 'BlockKind' lives in
-this module too and has the same four variants, so the bare names would
+this module too and has corresponding variants, so the bare names would
 clash. -}
 data UalBlock
-  = BOnchain OnchainDecl
+  = BInclude Text
+  | BOnchain OnchainDecl
   | -- | The body, verbatim.
     BPredicate Text
   | BProperty PropertyDecl
@@ -130,6 +131,8 @@ data UalBlock
 data ModuleUal = MkModuleUal
   { ualModuleName :: UalModuleName
   , ualModuleImports :: [UalModuleName]
+  , ualIncludes :: [Text]
+  -- ^ Lean modules requested for the bundle environment.
   , ualOnchain :: [OnchainDecl]
   , ualPredicates :: [Text]
   -- ^ @PREDICATE@ bodies, in source order.
@@ -139,4 +142,4 @@ data ModuleUal = MkModuleUal
   deriving stock (Eq, Show)
 
 emptyModuleUal :: UalModuleName -> ModuleUal
-emptyModuleUal n = MkModuleUal n [] [] [] [] []
+emptyModuleUal n = MkModuleUal n [] [] [] [] [] []

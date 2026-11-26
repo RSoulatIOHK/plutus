@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "UAL generator discovery",
+  "description": "The JSON array printed by list-generators.js. An empty array means no matching generators.",
+  "type": "array",
+  "items": { "$ref": "#/$defs/generator" },
+  "$defs": {
+    "generator": {
+      "type": "object",
+      "required": ["target", "cwd", "main", "sources", "properties", "hasLocalEnvironment", "argv", "command"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "type": "string", "description": "Fully qualified Cabal executable target." },
+        "cwd": { "type": "string", "description": "Absolute working directory for running the generator and resolving source paths." },
+        "main": { "$ref": "#/$defs/sourceFile" },
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/sourceFile" } },
+        "properties": {
+          "description": "Properties in assurance document order, or null when static discovery could not resolve them.",
+          "type": ["array", "null"],
+          "items": { "oneOf": [{ "$ref": "#/$defs/explicitProperty" }, { "$ref": "#/$defs/templateProperty" }] }
+        },
+        "propertyDiscoveryError": { "type": "string", "minLength": 1 },
+        "hasLocalEnvironment": { "type": "boolean", "description": "True when an environment.json file exists beside main, independently of an explicit --environment override." },
+        "argv": {
+          "type": "array",
+          "description": "Executable followed by arguments for direct process invocation from cwd.",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "command": { "type": "string", "description": "Shell-quoted rendering of argv for copying into a POSIX shell." }
+      },
+      "if": { "properties": { "properties": { "type": "null" } } },
+      "then": { "properties": { "propertyDiscoveryError": true }, "required": ["propertyDiscoveryError"] },
+      "else": { "properties": { "propertyDiscoveryError": false } }
+    },
+    "sourceFile": { "type": "string", "minLength": 1, "description": "Haskell source path relative to cwd." },
+    "propertyId": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$", "description": "Matches properties[].id in assurance.json." },
+    "position": {
+      "type": "object",
+      "description": "Zero-based line and UTF-16 character offset.",
+      "required": ["line", "character"],
+      "additionalProperties": false,
+      "properties": {
+        "line": { "type": "integer", "minimum": 0 },
+        "character": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "range": {
+      "type": "object",
+      "description": "Full UAL annotation, including delimiters; start inclusive, end exclusive.",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "$ref": "#/$defs/position" },
+        "end": { "$ref": "#/$defs/position" }
+      }
+    },
+    "explicitProperty": {
+      "type": "object",
+      "required": ["id", "kind", "file", "range", "title", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/propertyId" },
+        "kind": { "const": "explicit" },
+        "file": { "$ref": "#/$defs/sourceFile" },
+        "range": { "$ref": "#/$defs/range" },
+        "title": { "type": "string", "minLength": 1, "description": "Quoted UAL description (assurance statement.text)." },
+        "content": { "type": "string", "minLength": 1, "description": "Authored Lean body (assurance statement.formal.source)." }
+      }
+    },
+    "templateProperty": {
+      "type": "object",
+      "description": "Read the expanded statement from the generated assurance document using this ID.",
+      "required": ["id", "kind", "file", "range"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/propertyId" },
+        "kind": { "const": "template" },
+        "file": { "$ref": "#/$defs/sourceFile" },
+        "range": { "$ref": "#/$defs/range" }
+      }
+    }
+  }
+}

@@ -23,8 +23,9 @@ import PlutusTx.Builtins (equalsData, unsafeDataAsB, unsafeDataAsConstr)
 import PlutusTx.Prelude
 import PlutusTx.Ual (ModuleUal)
 import PlutusTx.Ual.TH (ualModule)
-import System.Environment (getArgs)
 import Prelude qualified as Haskell
+
+{-@ INCLUDE CardanoLedgerApi.V3 @-}
 
 {-@ ONCHAIN [version: PlutusV3] [steps: 1000, semantics: E]
     spendingOnly :: BuiltinData -> BuiltinUnit
@@ -139,10 +140,6 @@ annotations = $(ualModule)
 
 main :: Haskell.IO ()
 main = do
-  args <- getArgs
-  environment <- case args of
-    [path] -> Haskell.pure path
-    _ -> Haskell.fail "usage: example-ual-purpose-isolation ENVIRONMENT.json"
   let preamble =
         MkAssurancePreamble
           "Purpose isolation examples"
@@ -151,4 +148,4 @@ main = do
           ["Plutus contributors"]
           "2026-11-01"
           Nothing
-  writeInterfaceBundle environment preamble "" [annotations] blueprint
+  defaultMainInterfaceBundle preamble "" [annotations] blueprint

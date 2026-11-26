@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 {-| Producer for the coordinated, unpublished CIP-57/assurance dialects.
@@ -13,6 +14,8 @@ module PlutusTx.Assurance.Interface
   , compiledFunction
   , writeInterfaceBundleWithFunctions
   , writeInterfaceBundle
+  , defaultMainInterfaceBundle
+  , defaultMainInterfaceBundleWithBindings
   ) where
 
 import Codec.Extras.SerialiseViaFlat (SerialiseViaFlat (..))
@@ -20,6 +23,7 @@ import Codec.Serialise (serialise)
 import Control.Lens (over)
 import Control.Monad (foldM, forM, forM_, unless)
 import Data.Aeson (Value (..), object, toJSON, (.=))
+import Data.Aeson qualified as Aeson
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KM
@@ -27,6 +31,7 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Base16 qualified as Base16
 import Data.ByteString.Lazy qualified as LBS
 import Data.List (nub)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
@@ -39,7 +44,7 @@ import PlutusCore.Flat.Filler (Filler (FillerEnd))
 import PlutusTx.Assurance.Build (buildAssurance)
 import PlutusTx.Assurance.Document
 import PlutusTx.Assurance.SourceTypes (sourceTypesManifest)
-import PlutusTx.Assurance.Write (blueprintRef)
+import PlutusTx.Assurance.Write (blueprintRef, blueprintRefBytes)
 import PlutusTx.Blueprint.Contract (ContractBlueprint)
 import PlutusTx.Blueprint.Definition.Id (definitionIdToText)
 import PlutusTx.Blueprint.PlutusVersion (PlutusVersion (..))
@@ -56,6 +61,11 @@ import PlutusTx.Ual.Syntax
   , ResolvedArgument (..)
   , UalArgument (..)
   )
+import System.Console.GetOpt
+import System.Environment (getArgs, getProgName)
+import System.Exit qualified as Exit
+import System.IO (hFlush, stdout)
+import System.IO.Error (isDoesNotExistError, tryIOError)
 import UntypedPlutusCore qualified as UPLC
 import Prelude
 
@@ -335,18 +345,127 @@ writeInterfaceBundleWithBindings
   -> [FunctionArtifact]
   -> [(Text, Text, AppliedParameters)]
   -> IO ()
-writeInterfaceBundleWithBindings environment preamble defaultId modules bp artifacts bindings = do
+writeInterfaceBundleWithBindings environment =
+  emitInterfaceBundle writeArtifact (blueprintRef (T.pack environment) environment)
+
+data ArtifactEncoding = Utf8 | Base16
+
+type ArtifactSink = FilePath -> ArtifactEncoding -> BS.ByteString -> IO ()
+
+writeArtifact :: ArtifactSink
+writeArtifact path _ = BS.writeFile path
+
+streamArtifact :: ArtifactSink
+streamArtifact path encoding bytes = do
+  let (label, content) = case encoding of
+        Utf8 -> ("utf8" :: Text, TE.decodeUtf8 bytes)
+        Base16 -> ("base16", hex bytes)
+  LBS.hPut
+    stdout
+    (Aeson.encode (object ["path" .= path, "encoding" .= label, "content" .= content]) <> "\n")
+  hFlush stdout
+
+{-| CLI entry point. Pass ENVIRONMENT.json to write the bundle to the working
+directory, or add --ndjson to stream one losslessly encoded artifact per line. -}
+defaultMainInterfaceBundle :: AssurancePreamble -> Text -> [ModuleUal] -> ContractBlueprint -> IO ()
+defaultMainInterfaceBundle preamble defaultId modules bp =
+  defaultMainInterfaceBundleWithBindings preamble defaultId modules bp [] []
+
+data BundleOption = Help | Ndjson | Environment FilePath
+  deriving stock (Eq)
+
+-- | CLI entry point for generators with compiled functions or applied parameters.
+defaultMainInterfaceBundleWithBindings
+  :: AssurancePreamble
+  -> Text
+  -> [ModuleUal]
+  -> ContractBlueprint
+  -> [FunctionArtifact]
+  -> [(Text, Text, AppliedParameters)]
+  -> IO ()
+defaultMainInterfaceBundleWithBindings preamble defaultId modules bp artifacts bindings = do
+  prog <- getProgName
+  args <- getArgs
+  let options =
+        [ Option ['h'] ["help"] (NoArg Help) "Show this help"
+        , Option [] ["ndjson"] (NoArg Ndjson) "Stream artifacts to stdout (default: write files)"
+        , Option
+            []
+            ["environment"]
+            (ReqArg Environment "FILE")
+            "Bundle FILE instead of generating an unpinned environment manifest"
+        ]
+      usage = usageInfo ("Usage: " <> prog <> " [OPTIONS] [ENVIRONMENT.json]") options
+  case getOpt Permute options args of
+    (flags, paths, [])
+      | Help `elem` flags -> putStr usage
+      | otherwise -> do
+          manifest <- case paths <> [path | Environment path <- flags] of
+            [] -> pure (bootstrapEnvironment modules)
+            [path] -> BS.readFile path
+            _ -> Exit.die ("Supply at most one environment manifest.\n" <> usage)
+          let streaming = Ndjson `elem` flags
+              sink = if streaming then streamArtifact else writeArtifact
+              bundleEnvironment = do
+                if streaming
+                  then streamArtifact "environment.json" Utf8 manifest
+                  else writeBundleEnvironment manifest
+                pure (blueprintRefBytes "environment.json" manifest)
+          emitInterfaceBundle sink bundleEnvironment preamble defaultId modules bp artifacts bindings
+    (_, _, errors) -> Exit.die (concat errors <> usage)
+
+bootstrapEnvironment :: [ModuleUal] -> BS.ByteString
+bootstrapEnvironment modules =
+  let imports = Set.fromList ("PlutusCore.UPLC.BlueprintEncoding.Assurance" : concatMap ualIncludes modules)
+   in LBS.toStrict $
+        encodePretty
+          ( object
+              [ "format" .= ("illustrative-unpinned-environment" :: Text)
+              , "requiredImports" .= Set.toAscList imports
+              ]
+          )
+          <> "\n"
+
+-- An output directory may already contain a developer's pinned environment.
+-- Reuse identical bytes and never silently replace a different manifest.
+writeBundleEnvironment :: BS.ByteString -> IO ()
+writeBundleEnvironment bytes = do
+  let name = "environment.json"
+  existing <- tryIOError (BS.readFile name)
+  case existing of
+    Left e | isDoesNotExistError e -> BS.writeFile name bytes
+    Left e -> ioError e
+    Right old ->
+      unless (old == bytes) $
+        fail
+          "environment.json already exists with different contents; use --environment environment.json or a fresh output directory"
+
+emitInterfaceBundle
+  :: ArtifactSink
+  -> IO BlueprintRef
+  -> AssurancePreamble
+  -> Text
+  -> [ModuleUal]
+  -> ContractBlueprint
+  -> [FunctionArtifact]
+  -> [(Text, Text, AppliedParameters)]
+  -> IO ()
+emitInterfaceBundle emit environment preamble defaultId modules bp artifacts bindings = do
   let die = either fail pure
-      write f = LBS.writeFile f . (<> "\n") . encodePretty
+      jsonBytes value = LBS.toStrict (encodePretty value <> "\n")
+      write name = emit name Utf8 . jsonBytes
+      referenced name encoding bytes = do
+        emit name encoding bytes
+        pure (blueprintRefBytes (T.pack name) bytes)
   functions <- die (functionRegistry modules bp artifacts)
   let definitions = maybe (object []) id (optional "definitions" (toJSON bp))
   extended <- die (interfaceBlueprint modules bp)
   attached <- die (either (Left . show) Right (attachUal modules bp))
   validators <- die (field "validators" (toJSON attached) >>= array)
   extendedValidators <- die (field "validators" extended >>= array)
-  envRef <- blueprintRef (T.pack environment) environment
-  write "plutus.json" extended
-  ref <- blueprintRef "plutus.json" "plutus.json"
+  envRef <- environment
+  let blueprintBytes = jsonBytes extended
+  ref <- referenced "plutus.json" Utf8 blueprintBytes
   assurance <- die (either (Left . show) Right (buildAssurance preamble ref defaultId modules))
   let bindingIds = [(pid, vid) | (pid, vid, _) <- bindings]
   unless (length bindingIds == length (nub bindingIds)) (fail "duplicate applied binding")
@@ -413,12 +532,10 @@ writeInterfaceBundleWithBindings environment preamble defaultId modules bp artif
               let prefix = "applied-" <> T.unpack (propertyIdent prop) <> "-" <> T.unpack vid
               terms <- forM (zip [0 :: Int ..] values) $ \(i, bytes) -> do
                 let name = prefix <> "-" <> show i <> ".flat"
-                BS.writeFile name bytes
-                termRef <- blueprintRef (T.pack name) name
+                termRef <- referenced name Base16 bytes
                 pure (object ["parameter" .= ("/parameters/" <> T.pack (show i)), "term" .= termRef])
               let name = prefix <> ".cbor"
-              BS.writeFile name code
-              codeRef <- blueprintRef (T.pack name) name
+              codeRef <- referenced name Base16 code
               version <- die (field "preamble" extended >>= field "plutusVersion" >>= text)
               language <- die $ case version of
                 "v1" -> Right PlutusV1
@@ -444,20 +561,21 @@ writeInterfaceBundleWithBindings environment preamble defaultId modules bp artif
       [setting] -> Right setting
       _ -> Left "all targets of a property must use the same execution settings"
     let name = "checking-" <> T.unpack (propertyIdent prop) <> ".json"
-    write name $
-      object
-        [ "$schema" .= ("https://cips.cardano.org/cips/cipXXXX/schemas/checking-context.json" :: Text)
-        , "profile" .= ("https://cips.cardano.org/cips/cipXXXX/profiles/uplc-step-check/v1" :: Text)
-        , "environment" .= envRef
-        , "execution"
-            .= object
-              [ "semanticsVariant" .= sem
-              , "acceptance" .= ("evaluation" :: Text)
-              , "budget" .= object ["kind" .= ("cek-steps" :: Text), "steps" .= steps]
-              ]
-        , "targets" .= [t | (t, _, _) <- targets]
-        ]
-    contextRef <- blueprintRef (T.pack name) name
+    contextRef <-
+      referenced name Utf8 $
+        jsonBytes $
+          object
+            [ "$schema" .= ("https://cips.cardano.org/cips/cipXXXX/schemas/checking-context.json" :: Text)
+            , "profile" .= ("https://cips.cardano.org/cips/cipXXXX/profiles/uplc-step-check/v1" :: Text)
+            , "environment" .= envRef
+            , "execution"
+                .= object
+                  [ "semanticsVariant" .= sem
+                  , "acceptance" .= ("evaluation" :: Text)
+                  , "budget" .= object ["kind" .= ("cek-steps" :: Text), "steps" .= steps]
+                  ]
+            , "targets" .= [t | (t, _, _) <- targets]
+            ]
     pure (propertyIdent prop, toJSON contextRef)
   let doc = toJSON assurance
       props =
@@ -488,5 +606,4 @@ writeInterfaceBundleWithBindings environment preamble defaultId modules bp artif
           set "languages" langs $
             set "checkingContexts" (Object (KM.fromList [(Key.fromText k, v) | (k, v) <- contexts])) $
               set "properties" (toJSON props) doc
-  blueprintBytes <- BS.readFile "plutus.json"
   write "source-types.json" (sourceTypesManifest (hex (sha2_256 blueprintBytes)) bp)

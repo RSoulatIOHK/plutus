@@ -20,7 +20,6 @@ import PlutusTx.Blueprint
 import PlutusTx.Prelude
 import PlutusTx.Ual (ModuleUal)
 import PlutusTx.Ual.TH (ualIdFor, ualModule)
-import System.Environment (getArgs)
 import Prelude qualified as Haskell
 
 -- The isGoodGuess rule from plutus-apps' Plutus.Contracts.Game.Alonzo:
@@ -53,9 +52,11 @@ def hashMatches (actual guess : ByteString) : Prop :=
       isUnsuccessful (gameValidator (Data.B actual) (Data.B guess) ctx)
 @-}
 
+-- We use isSuccessful here on purpose. The validator rejects integer datums,
+-- so Blaster reports this property as falsified and shows a counterexample.
 {-@ PROPERTY [scope: gameValidator] malformed_datum
     "An integer datum fails to decode as the stored hash, for every redeemer and context."
-  : ∀ (r ctx : Data), isSuccessful (gameValidator (Data.I 0) r ctx)
+  : ∀ (n : Integer) (r ctx : Data), isSuccessful (gameValidator (Data.I n) r ctx)
 @-}
 
 code :: PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> BuiltinUnit)
@@ -93,10 +94,6 @@ annotations = $(ualModule)
 
 main :: Haskell.IO ()
 main = do
-  args <- getArgs
-  environment <- case args of
-    [path] -> Haskell.pure path
-    _ -> Haskell.fail "usage: example-ual-game ENVIRONMENT.json"
   let preamble =
         MkAssurancePreamble
           { assuranceTitle = "Guessing game assurance"
@@ -106,4 +103,4 @@ main = do
           , assuranceCreated = "2026-09-29"
           , assuranceLicense = Just "Apache-2.0"
           }
-  writeInterfaceBundle environment preamble "gameValidator" [annotations] blueprint
+  defaultMainInterfaceBundle preamble "gameValidator" [annotations] blueprint
