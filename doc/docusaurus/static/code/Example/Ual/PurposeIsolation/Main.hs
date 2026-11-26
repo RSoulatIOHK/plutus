@@ -25,6 +25,8 @@ import PlutusTx.Ual (ModuleUal)
 import PlutusTx.Ual.TH (ualModule)
 import Prelude qualified as Haskell
 
+{-@ INCLUDE CardanoLedgerApi.V3 @-}
+
 {-@ ONCHAIN [version: PlutusV3] [steps: 1000, semantics: E]
     spendingOnly :: BuiltinData -> BuiltinUnit
 @-}

@@ -52,9 +52,11 @@ def hashMatches (actual guess : ByteString) : Prop :=
       isUnsuccessful (gameValidator (Data.B actual) (Data.B guess) ctx)
 @-}
 
+-- We use isSuccessful here on purpose. The validator rejects integer datums,
+-- so Blaster reports this property as falsified and shows a counterexample.
 {-@ PROPERTY [scope: gameValidator] malformed_datum
     "An integer datum fails to decode as the stored hash, for every redeemer and context."
-  : ∀ (r ctx : Data), isSuccessful (gameValidator (Data.I 0) r ctx)
+  : ∀ (n : Integer) (r ctx : Data), isSuccessful (gameValidator (Data.I n) r ctx)
 @-}
 
 code :: PlutusTx.CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> BuiltinUnit)

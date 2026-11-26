@@ -70,6 +70,7 @@ ualModule = do
       { ualModuleName = $(lift (ualModuleName m))
       , ualModuleImports = $(lift (ualModuleImports m))
       , ualOnchain = $(pure (TH.ListE onchainExps))
+      , ualIncludes = $(lift (ualIncludes m))
       , ualPredicates = $(lift (ualPredicates m))
       , ualProperties = $(lift (ualProperties m))
       , ualUplcData = $(lift (ualUplcData m))

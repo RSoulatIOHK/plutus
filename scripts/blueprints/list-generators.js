@@ -81,9 +81,10 @@ function listGenerators(packageFile, selectedSource, environment) {
 
     const target = packageName + ':exe:' + exe;
     const localEnv = path.join(path.dirname(mainFile), 'environment.json');
-    const env = environment || (fs.existsSync(localEnv) ? localEnv : null);
-    const argv = ['cabal', 'run', '-v0', target, '--', '--ndjson', '--environment',
-      env ? path.relative(cwd, env) : '<environment.json>'];
+    const hasLocalEnvironment = fs.statSync(localEnv, { throwIfNoEntry: false })?.isFile() === true;
+    const env = environment || (hasLocalEnvironment ? localEnv : null);
+    const argv = ['cabal', 'run', '-v0', target, '--', '--ndjson'];
+    if (env) argv.push('--environment', path.relative(cwd, env));
     const mainSource = { file: path.relative(cwd, mainFile), text: mainText };
     const moduleSources = new Map([...moduleFiles].map(([name, file]) =>
       [name, { file: path.relative(cwd, file), text: fs.readFileSync(file, 'utf8') }]));
@@ -91,7 +92,7 @@ function listGenerators(packageFile, selectedSource, environment) {
       target, cwd, main: path.relative(cwd, mainFile),
       sources: sources.map(f => path.relative(cwd, f)),
       ...generatorProperties(mainSource, mainBody, moduleSources),
-      needsEnvironment: !env,
+      hasLocalEnvironment,
       argv,
       command: argv.map(shellQuote).join(' '),
     });

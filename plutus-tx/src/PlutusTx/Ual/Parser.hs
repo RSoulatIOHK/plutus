@@ -38,10 +38,23 @@ import PlutusTx.Ual.Syntax
 
 parseBlock :: RawBlock -> Either UalError UalBlock
 parseBlock rb = case rawKind rb of
+  KInclude -> BInclude <$> parseInclude (rawLine rb) (rawBody rb)
   KOnchain -> BOnchain <$> parseOnchain (rawLine rb) (rawBody rb)
   KPredicate -> Right (BPredicate (rawBody rb))
   KProperty -> BProperty <$> parseProperty (rawLine rb) (rawBody rb)
   KUplcData -> BUplcData <$> parseUplcData (rawLine rb) (rawBody rb)
+
+-- | One dotted Lean module name per INCLUDE annotation.
+parseInclude :: Int -> Text -> Either UalError Text
+parseInclude line body =
+  let name = Text.strip body
+      validPart part = case Text.uncons part of
+        Just (c, cs) ->
+          (Char.isLetter c || c == '_') && Text.all (\x -> Char.isAlphaNum x || x == '_' || x == '\'') cs
+        Nothing -> False
+   in if all validPart (Text.splitOn "." name)
+        then Right name
+        else Left (MalformedBlock line "INCLUDE expects one dotted Lean module name")
 
 ----------------------------------------------------------------------------------------------------
 -- ONCHAIN -----------------------------------------------------------------------------------------
@@ -390,6 +403,7 @@ moduleUalFromSource fallbackName src = do
     -- Appends keep source order; the lists are short.
     addBlock m = \case
       BOnchain d -> m {ualOnchain = ualOnchain m <> [d]}
+      BInclude name -> m {ualIncludes = ualIncludes m <> [name]}
       BPredicate b -> m {ualPredicates = ualPredicates m <> [b]}
       BProperty d -> m {ualProperties = ualProperties m <> [d]}
       BUplcData n -> m {ualUplcData = ualUplcData m <> [n]}

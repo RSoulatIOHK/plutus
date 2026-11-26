@@ -10,9 +10,21 @@ node scripts/blueprints/list-generators.js \
 
 Print a copy-pasteable shell command per generator with
 `node scripts/blueprints/list-generators.js | jq -r '.[].command'`.
-Run each command from its result's `cwd`. If `needsEnvironment` is true,
-pass `--environment FILE` to discovery to fill in the manifest path.
-Programmatic callers can continue using `argv` directly.
+Run each command from its result's `cwd`. `hasLocalEnvironment` reports whether
+an `environment.json` file was found beside the executable's `main-is` source.
+Discovery uses that file when present. An explicit `--environment FILE` takes
+precedence and does not change the flag. With neither, the command omits
+`--environment` and the generator creates an unpinned manifest.
+Programmatic callers can use `argv` directly.
+
+The CLI includes the selected or generated manifest as `environment.json`
+in file and NDJSON output. A supplied file is copied byte for byte. For an
+automatically generated manifest, each module passed to the generator may
+declare a Lean module with `{-@ INCLUDE My.Lean.Module @-}`. The generator
+sorts and deduplicates those names together with the default
+`PlutusCore.UPLC.BlueprintEncoding.Assurance` import. These declarations
+describe the unpinned manifest; the checker selects its own import profile.
+Use `cardano-blaster check ... --refresh-environment` with an unpinned bundle.
 
 `file` is relative to the result's `cwd`. The range covers the whole UAL
 annotation, including its delimiters. Both lines and UTF-16 character offsets

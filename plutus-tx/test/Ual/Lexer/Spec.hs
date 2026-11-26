@@ -65,9 +65,10 @@ tests =
                 , "{-@ PREDICATE b @-}"
                 , "{-@ PROPERTY c @-}"
                 , "{-@ UPLC_DATA d @-}"
+                , "{-@ INCLUDE Foo.Bar @-}"
                 ]
             )
-          @?= Right [KOnchain, KPredicate, KProperty, KUplcData]
+          @?= Right [KOnchain, KPredicate, KProperty, KUplcData, KInclude]
     , testCase "body is byte-identical, including Unicode and nested braces" $
         (fmap rawBody . lexedBlocks) <$> lexModule ("{-@ PREDICATE " <> tricky <> " @-}")
           @?= Right [" " <> tricky <> " "]

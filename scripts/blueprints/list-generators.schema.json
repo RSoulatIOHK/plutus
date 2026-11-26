@@ -7,7 +7,7 @@
   "$defs": {
     "generator": {
       "type": "object",
-      "required": ["target", "cwd", "main", "sources", "properties", "needsEnvironment", "argv", "command"],
+      "required": ["target", "cwd", "main", "sources", "properties", "hasLocalEnvironment", "argv", "command"],
       "additionalProperties": false,
       "properties": {
         "target": { "type": "string", "description": "Fully qualified Cabal executable target." },
@@ -20,7 +20,7 @@
           "items": { "oneOf": [{ "$ref": "#/$defs/explicitProperty" }, { "$ref": "#/$defs/templateProperty" }] }
         },
         "propertyDiscoveryError": { "type": "string", "minLength": 1 },
-        "needsEnvironment": { "type": "boolean", "description": "True when argv contains a placeholder for the environment manifest." },
+        "hasLocalEnvironment": { "type": "boolean", "description": "True when an environment.json file exists beside main, independently of an explicit --environment override." },
         "argv": {
           "type": "array",
           "description": "Executable followed by arguments for direct process invocation from cwd.",

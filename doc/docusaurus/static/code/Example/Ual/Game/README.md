@@ -6,18 +6,18 @@ arguments and tests decoding failures as well as success. It does not rebuild
 the old off-chain application or its address-diversifying GameParam.
 
 Build `docusaurus-examples:exe:example-ual-game`, then run the resulting executable
-as `example-ual-game environment.json` in an output directory. It writes the draft
+as `example-ual-game` in an output directory. It writes an unpinned
+`environment.json` and the draft
 CIP-57 compiled-interface `plutus.json`, assurance-v2 `assurance.json`, and separate
 digest-bound checking contexts. The blueprint contains invocation roles and schema
 references; the contexts contain execution bounds and semantics. Compilation emits claims, not
 verification evidence.
 
 To stream the same bundle to stdout, run the following from the repository root.
-This example uses an illustrative environment manifest.
+Use `--environment FILE` to bundle an existing manifest instead.
 
 ```sh
-cabal run -v0 docusaurus-examples:exe:example-ual-game -- \
-  --ndjson --environment doc/docusaurus/static/code/Example/Ual/Blueprint/environment.json
+cabal run -v0 docusaurus-examples:exe:example-ual-game -- --ndjson
 ```
 
 Each NDJSON line has a `path`, an `encoding`, and a `content` string. For

@@ -201,6 +201,7 @@ assemblyTests =
             MkModuleUal
               { ualModuleName = UalModuleName "My.Contract"
               , ualModuleImports = [UalModuleName "My.Types"]
+              , ualIncludes = ["My.Lean.Module"]
               , ualOnchain =
                   [ MkOnchainDecl
                       { onchainKind = Script
@@ -227,6 +228,9 @@ assemblyTests =
                   ]
               , ualUplcData = ["D"]
               }
+    , testCase "INCLUDE rejects a list disguised as a module name" $
+        parseBlock (MkRawBlock KInclude "Foo Bar" 3)
+          @?= Left (MalformedBlock 3 "INCLUDE expects one dotted Lean module name")
     , testCase "falls back to the supplied name when there is no module header" $
         (ualModuleName <$> moduleUalFromSource (UalModuleName "Fallback") "{-@ UPLC_DATA D @-}\n")
           @?= Right (UalModuleName "Fallback")
@@ -249,4 +253,5 @@ assemblyTests =
         , "@-}" --                           10
         , "{-@ PROPERTY p \"t\" : True @-}" -- 11
         , "{-@ UPLC_DATA D @-}" --           12
+        , "{-@ INCLUDE My.Lean.Module @-}"
         ]

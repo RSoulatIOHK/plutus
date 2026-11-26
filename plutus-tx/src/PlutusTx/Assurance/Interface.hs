@@ -31,6 +31,7 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Base16 qualified as Base16
 import Data.ByteString.Lazy qualified as LBS
 import Data.List (nub)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as TE
@@ -64,6 +65,7 @@ import System.Console.GetOpt
 import System.Environment (getArgs, getProgName)
 import System.Exit qualified as Exit
 import System.IO (hFlush, stdout)
+import System.IO.Error (isDoesNotExistError, tryIOError)
 import UntypedPlutusCore qualified as UPLC
 import Prelude
 
@@ -343,7 +345,8 @@ writeInterfaceBundleWithBindings
   -> [FunctionArtifact]
   -> [(Text, Text, AppliedParameters)]
   -> IO ()
-writeInterfaceBundleWithBindings = emitInterfaceBundle writeArtifact
+writeInterfaceBundleWithBindings environment =
+  emitInterfaceBundle writeArtifact (blueprintRef (T.pack environment) environment)
 
 data ArtifactEncoding = Utf8 | Base16
 
@@ -386,21 +389,60 @@ defaultMainInterfaceBundleWithBindings preamble defaultId modules bp artifacts b
   let options =
         [ Option ['h'] ["help"] (NoArg Help) "Show this help"
         , Option [] ["ndjson"] (NoArg Ndjson) "Stream artifacts to stdout (default: write files)"
-        , Option [] ["environment"] (ReqArg Environment "FILE") "Use FILE as the environment manifest"
+        , Option
+            []
+            ["environment"]
+            (ReqArg Environment "FILE")
+            "Bundle FILE instead of generating an unpinned environment manifest"
         ]
       usage = usageInfo ("Usage: " <> prog <> " [OPTIONS] [ENVIRONMENT.json]") options
   case getOpt Permute options args of
     (flags, paths, [])
       | Help `elem` flags -> putStr usage
-      | [environment] <- paths <> [path | Environment path <- flags] ->
-          let sink = if Ndjson `elem` flags then streamArtifact else writeArtifact
-           in emitInterfaceBundle sink environment preamble defaultId modules bp artifacts bindings
-      | otherwise -> Exit.die ("Supply exactly one environment manifest.\n" <> usage)
+      | otherwise -> do
+          manifest <- case paths <> [path | Environment path <- flags] of
+            [] -> pure (bootstrapEnvironment modules)
+            [path] -> BS.readFile path
+            _ -> Exit.die ("Supply at most one environment manifest.\n" <> usage)
+          let streaming = Ndjson `elem` flags
+              sink = if streaming then streamArtifact else writeArtifact
+              bundleEnvironment = do
+                if streaming
+                  then streamArtifact "environment.json" Utf8 manifest
+                  else writeBundleEnvironment manifest
+                pure (blueprintRefBytes "environment.json" manifest)
+          emitInterfaceBundle sink bundleEnvironment preamble defaultId modules bp artifacts bindings
     (_, _, errors) -> Exit.die (concat errors <> usage)
+
+bootstrapEnvironment :: [ModuleUal] -> BS.ByteString
+bootstrapEnvironment modules =
+  let imports = Set.fromList ("PlutusCore.UPLC.BlueprintEncoding.Assurance" : concatMap ualIncludes modules)
+   in LBS.toStrict $
+        encodePretty
+          ( object
+              [ "format" .= ("illustrative-unpinned-environment" :: Text)
+              , "requiredImports" .= Set.toAscList imports
+              ]
+          )
+          <> "\n"
+
+-- An output directory may already contain a developer's pinned environment.
+-- Reuse identical bytes and never silently replace a different manifest.
+writeBundleEnvironment :: BS.ByteString -> IO ()
+writeBundleEnvironment bytes = do
+  let name = "environment.json"
+  existing <- tryIOError (BS.readFile name)
+  case existing of
+    Left e | isDoesNotExistError e -> BS.writeFile name bytes
+    Left e -> ioError e
+    Right old ->
+      unless (old == bytes) $
+        fail
+          "environment.json already exists with different contents; use --environment environment.json or a fresh output directory"
 
 emitInterfaceBundle
   :: ArtifactSink
-  -> FilePath
+  -> IO BlueprintRef
   -> AssurancePreamble
   -> Text
   -> [ModuleUal]
@@ -421,7 +463,7 @@ emitInterfaceBundle emit environment preamble defaultId modules bp artifacts bin
   attached <- die (either (Left . show) Right (attachUal modules bp))
   validators <- die (field "validators" (toJSON attached) >>= array)
   extendedValidators <- die (field "validators" extended >>= array)
-  envRef <- blueprintRef (T.pack environment) environment
+  envRef <- environment
   let blueprintBytes = jsonBytes extended
   ref <- referenced "plutus.json" Utf8 blueprintBytes
   assurance <- die (either (Left . show) Right (buildAssurance preamble ref defaultId modules))
